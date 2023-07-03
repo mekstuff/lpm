@@ -15,9 +15,7 @@ export interface AddOptions {
   showPmLogs?: boolean;
 }
 
-export function GetPreferredPackageManager(
-  InstallationPath?: string
-): AddOptions["packageManager"] {
+export function GetPreferredPackageManager(): AddOptions["packageManager"] {
   return "yarn";
 }
 

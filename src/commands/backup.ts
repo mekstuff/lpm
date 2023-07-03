@@ -9,7 +9,6 @@ import {
   GetLPMDirectory,
   GetLPMPackagesJSON,
   ReadLPMPackagesJSON,
-  WriteLPMPackagesJSON,
 } from "../utils/lpmfiles.js";
 import logreport from "../utils/logreport.js";
 import enqpkg from "enquirer";

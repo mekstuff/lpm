@@ -12,7 +12,7 @@ import logreport from "../utils/logreport.js";
 import { SUPPORTED_PACKAGE_MANAGERS } from "../utils/CONSTANTS.js";
 import { AddInstallationsToGlobalPackage, GenerateLockFileAtCwd, GetLPMPackagesJSON, ReadLPMPackagesJSON, } from "../utils/lpmfiles.js";
 import { exec } from "child_process";
-export function GetPreferredPackageManager(InstallationPath) {
+export function GetPreferredPackageManager() {
     return "yarn";
 }
 export default class Add {
