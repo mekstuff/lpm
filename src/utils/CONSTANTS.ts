@@ -1,4 +1,4 @@
-type ValueOf<T> = T[keyof T];
+// type ValueOf<T> = T[keyof T];
 
 export const SUPPORTED_PACKAGE_MANAGERS = ["yarn", "pnpm"];
 // export type SUPPORTED_PACKAGE_MANAGERS = ValueOf<

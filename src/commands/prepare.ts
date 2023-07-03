@@ -1,4 +1,3 @@
-import path from "path";
 import { program as CommanderProgram } from "commander";
 import logreport from "../utils/logreport.js";
 import { ReadLockFileFromCwd } from "../utils/lpmfiles.js";

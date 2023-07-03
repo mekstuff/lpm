@@ -1,5 +1,3 @@
-import path from "path";
-import fs from "fs";
 import logreport from "../utils/logreport.js";
 import { program as CommanderProgram } from "commander";
 import pack from "./pack.js";

@@ -3,7 +3,6 @@
 import { Command } from "commander";
 import commands from "./commands/index.js";
 import { ReadLockFileFromCwd } from "./utils/lpmfiles.js";
-import { execSync } from "child_process";
 import { AddOptions } from "./commands/add.js";
 
 const program = new Command();
