@@ -25,7 +25,9 @@ export default class publish extends pack {
       logreport.error(result);
     }
     if (!result || typeof result === "string") {
-      return logreport.error("Something went wrong while packing") as undefined;
+      return logreport.error(
+        "Something went wrong while publishing"
+      ) as undefined;
     }
     if (!result.name) {
       return logreport.error("Package must have a name to publish.");
@@ -66,6 +68,7 @@ export default class publish extends pack {
         result.name,
         "tarbal.tgz"
       ),
+      scripts: Options.scripts,
     }).catch((err) => {
       console.error(err);
       logreport.error("Failed to pack. " + err);

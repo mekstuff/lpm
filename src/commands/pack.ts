@@ -4,9 +4,11 @@ import tar from "tar";
 import logreport from "../utils/logreport.js";
 import { program as CommanderProgram } from "commander";
 import { ReadPackageJSON } from "../utils/PackageReader.js";
+import { execSync } from "child_process";
 
 interface PackOptions {
   out?: string;
+  scripts?: boolean;
 }
 
 async function GetPackageFiles(PackagePath: string, packageJson: object) {
@@ -85,6 +87,22 @@ export default class pack {
     if (!result || typeof result === "string") {
       return logreport.error("Something went wrong while packing") as undefined;
     }
+    if (result.scripts) {
+      if (Options.scripts) {
+        const PrePackScript = result.scripts["prepack"];
+        if (PrePackScript) {
+          logreport("Running `prepack` script", "log", true);
+          execSync(PrePackScript, {
+            cwd: packagePath,
+            stdio: "inherit",
+          });
+        }
+      } else {
+        logreport.warn(
+          "scripts detected but `--no-scripts` flag was passed, not executing."
+        );
+      }
+    }
     Options.out = Options.out || `${result.name}-v${result.version}.tgz`;
     logreport.logwithelapse(`Packaging "${result.name}"...`, "PACK");
     const MapPack = await GetPackageFiles(packagePath, result).catch((err) => {
@@ -118,6 +136,7 @@ export default class pack {
     program
       .command("pack [packagePath]")
       .option("-o, --out", "Where to put tar file.")
+      .option("--no-scripts [boolean]", "Running any pack related scripts.")
       //   .option("-p, --packer", "What package manager to use to package.")
       .description("Packs package to be prepared to publish.")
       .action((packagePath, options) => {
