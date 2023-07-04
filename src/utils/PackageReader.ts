@@ -7,6 +7,7 @@ interface PackageFileRequired {
   version: string;
   dependencies: { [key: string]: string };
   scripts?: { [key: string]: string };
+  bin: { [key: string]: string };
 }
 
 type PackageFile = Partial<PackageFileRequired>;
@@ -14,7 +15,7 @@ type PackageFile = Partial<PackageFileRequired>;
 export async function ReadPackageJSON(
   PackagePath: string,
   JsonFileName?: string
-): Promise<{ success: boolean; result?: string | PackageFile }> {
+): Promise<{ success: boolean; result: string | PackageFile }> {
   JsonFileName = JsonFileName || "package.json";
   const JSONPath = path.join(PackagePath, JsonFileName);
   const pathExists = fs.existsSync(JSONPath);

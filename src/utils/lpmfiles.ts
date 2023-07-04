@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import logreport from "./logreport.js";
 import { BackUpLPMPackagesJSON } from "../commands/backup.js";
+import { ReadPackageJSON } from "./PackageReader.js";
 
 const LPM_DIR = path.join(os.homedir(), ".local-package-manager");
 
@@ -307,19 +308,94 @@ export async function GenerateLockFileAtCwd(cwd?: string) {
     const LOCK: LOCKFILE = {
       pkgs: {},
     };
+    const bindir = path.join(cwd, "node_modules", ".bin");
     for (const Package in LPMPackagesJSON.packages) {
       // const PreviousInLock =(PreviousLockfileData.pkgs && PreviousLockfileData.pkgs[Package]) || {};
       const PackageData = LPMPackagesJSON.packages[Package];
-      PackageData.installations.forEach((installation) => {
+      PackageData.installations.forEach(async (installation) => {
         if (installation === cwd) {
           if (!LOCK.pkgs[Package]) {
             LOCK.pkgs[Package] = {
               resolve: PackageData.resolve,
               // pm: PreviousInLock.pm || undefined,
             };
+
+            //updating .bin files to use relative paths and not symlink paths.
+            try {
+              const Read = await ReadPackageJSON(PackageData.resolve);
+              if (!Read.success) {
+                logreport.warn("No package.json file exist. => " + Read.result);
+                return;
+              }
+              if (typeof Read.result === "string") {
+                logreport.warn("something went wrong");
+                return;
+              }
+              const UpdateBins = new Map<string, string>();
+              if (Read.result.bin) {
+                for (const binName in Read.result.bin) {
+                  const binSource = Read.result.bin[binName];
+                  UpdateBins.set(binName, binSource);
+                }
+              }
+              if (UpdateBins.size > 0) {
+                UpdateBins.forEach((binSource, binName) => {
+                  // const BinFilePath = path.join(bindir, binName);
+
+                  //for /.bin/binName.cmd
+                  const BinCMDPath = path.join(bindir, binName + ".cmd");
+                  if (fs.existsSync(BinCMDPath)) {
+                    const Source = fs.readFileSync(BinCMDPath, "utf8");
+                    //path in cwd (node_modules/...)
+                    const ExecutableSourceFileInNodeModules =
+                      "\\" +
+                      path.relative(
+                        bindir,
+                        path.join("node_modules", Package, binSource)
+                      );
+                    //path in .lpm global directory
+                    const BinSourceFileRelativeToNodeModulesBin =
+                      "\\" +
+                      path.relative(
+                        bindir,
+                        path.join(PackageData.resolve, binSource)
+                      );
+                    // console.log(BinSourceFileRelativeToNodeModulesBin);
+                    const SEARCH_NODE_EXE_IF = `"%~dp0\\node.exe"  "%~dp0${BinSourceFileRelativeToNodeModulesBin}" %*`;
+                    const REPLACE_NODE_EXE_IF = `"%~dp0\\node.exe --preserve-symlinks --preserve-symlinks-main "  "%~dp0${ExecutableSourceFileInNodeModules}" %*`;
+                    const SEARCH_NODE_EXE_ELSE = `node  "%~dp0${BinSourceFileRelativeToNodeModulesBin}" %*`;
+                    const REPLACE_NODE_EXE_ELSE = `node --preserve-symlinks --preserve-symlinks-main  "%~dp0${ExecutableSourceFileInNodeModules}" %*`;
+                    const newSource =
+                      "@REM This binary file was edited by LPM.\n@REM Some node flags were added to have local dependencies binaries be executed properly.\n@REM To report any problems or get support: https://github.com/mekstuff/lpm\n\n" +
+                      Source.replace(
+                        SEARCH_NODE_EXE_IF,
+                        REPLACE_NODE_EXE_IF
+                      ).replace(SEARCH_NODE_EXE_ELSE, REPLACE_NODE_EXE_ELSE);
+
+                    fs.writeFileSync(BinCMDPath, newSource, "utf8");
+                  }
+                });
+              }
+            } catch (err) {
+              logreport.warn("Could not update .bin files => " + err);
+            }
           }
         }
       });
+      /*
+      //updating .bin files to use relative paths and not symlink paths.
+      try {
+        const bindir = path.join(cwd, "node_modules", ".bin");
+        if (fs.existsSync(bindir)) {
+          for (const pkg in LOCK.pkgs) {
+            console.log(pkg);
+          }
+        }
+      } catch (e) {
+        logreport.error("Failed to edit .bin files " + e);
+      }
+      */
+
       await AddLockFileToCwd(cwd, LOCK);
     }
   } catch (e) {

@@ -8,7 +8,7 @@ import {
   GetLPMPackagesJSON,
   ReadLPMPackagesJSON,
 } from "../utils/lpmfiles.js";
-import { exec } from "child_process";
+import { exec, execSync } from "child_process";
 
 export interface AddOptions {
   packageManager?: SUPPORTED_PACKAGE_MANAGERS;
@@ -93,8 +93,11 @@ export default class Add {
       PackageManagerFlags.join(" ");
 
     logreport(`Executing "${execString}"`, "VERBOSE");
-    const p = new Promise<number | null>((resolve) => {
-      const executed = exec(execString);
+    // const p = new Promise<number | null>((resolve) => {
+    const executed = execSync(execString, {
+      stdio: (Options.showPmLogs && "inherit") || "ignore",
+    });
+    /*
       executed.on("exit", (code) => {
         resolve(code);
       });
@@ -120,11 +123,12 @@ export default class Add {
         }
       });
     });
+    */
 
-    logreport(`Exit Code "${p}"`, "VERBOSE");
+    logreport(`Exit Code "${executed}"`, "VERBOSE");
 
     logreport.logwithelapse(
-      `Installed with package manager with exit code ${await p}`,
+      `Installed with package manager with exit code ${executed}`,
       "INSTALL_PKGS"
     );
 
@@ -140,7 +144,11 @@ export default class Add {
         "Add a package to your project. Any Unknown Options will be sent to the package manager."
       )
       .option("-pm, --package-manager [string]", "The package manager to use.")
-      .option("--show-pm-logs", "Show package managers output in terminal.")
+      .option(
+        "-log, --show-pm-logs [boolean]",
+        "Show package managers output in terminal.",
+        false
+      )
       .action((packages, options) => {
         this.Add(packages, options);
       });

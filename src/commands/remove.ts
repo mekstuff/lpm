@@ -128,7 +128,7 @@ export default class remove {
         "Skips checking for package within the lock file."
       )
       .option(
-        "--show-pm-logs [string]",
+        "-log, --show-pm-logs [boolean]",
         "Show package managers output in terminal."
       )
       .action((packages, options) => {

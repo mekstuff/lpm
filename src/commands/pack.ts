@@ -14,7 +14,7 @@ async function GetPackageFiles(PackagePath: string, packageJson: object) {
   logreport.assert(packageJson !== undefined, "Package JSON Not Passed.");
 
   const MUST_INCLUDE = ["package.json"];
-  let MUST_EXCLUDE = [".gitignore", "node_modules", "yarn-error"];
+  let MUST_EXCLUDE = [".gitignore", "node_modules", "yarn-error.log"];
   // adding ignore files from .gitignore
   try {
     const HasGitIgnore = fs.readFileSync(
