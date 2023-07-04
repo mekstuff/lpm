@@ -6,11 +6,12 @@ interface PackageFileRequired {
   name: string;
   version: string;
   dependencies: { [key: string]: string };
-  scripts?: { [key: string]: string };
+  devDependencies: { [key: string]: string };
+  scripts: { [key: string]: string };
   bin: { [key: string]: string };
 }
 
-type PackageFile = Partial<PackageFileRequired>;
+export type PackageFile = Partial<PackageFileRequired>;
 
 export async function ReadPackageJSON(
   PackagePath: string,

@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 import logreport from "./logreport.js";
 import { BackUpLPMPackagesJSON } from "../commands/backup.js";
-import { ReadPackageJSON } from "./PackageReader.js";
+import { PackageFile, ReadPackageJSON } from "./PackageReader.js";
 
 const LPM_DIR = path.join(os.homedir(), ".local-package-manager");
 
@@ -146,7 +146,6 @@ export async function WriteLPMPackagesJSON(
       options || { encoding: "utf8" }
     );
   } catch (e) {
-    console.log("caught");
     wrote = false;
   }
   return wrote;
@@ -227,8 +226,8 @@ export async function AddInstallationsToGlobalPackage(
     TargetPackage.installations = [
       ...new Set([...OldInstallationData, ...Installations]),
     ];
-    WriteLPMPackagesJSON(LPMPackagesJSON);
   });
+  await WriteLPMPackagesJSON(LPMPackagesJSON);
 }
 
 export async function RemoveInstallationsToGlobalPackage(
@@ -249,12 +248,19 @@ export async function RemoveInstallationsToGlobalPackage(
         return false;
       }
     });
-    WriteLPMPackagesJSON(LPMPackagesJSON);
   });
+  await WriteLPMPackagesJSON(LPMPackagesJSON);
 }
 
 //LOCK
-type LOCKFILEPKG = { resolve: string };
+type LOCKFILEPKG = {
+  resolve: string;
+  dependencyScope?:
+    | "peerDependency"
+    | "devDependency"
+    | "optionalDependency"
+    | "dependency";
+};
 interface LOCKFILE {
   pkgs: { [key: string]: LOCKFILEPKG };
 }
@@ -295,6 +301,27 @@ export async function AddLockFileToCwd(cwd?: string, data?: unknown) {
   }
 }
 
+function GetPackageDependencyScope(
+  Package: string,
+  TargetPackageJSON: PackageFile
+): LOCKFILEPKG["dependencyScope"] {
+  //dependency
+  if (
+    TargetPackageJSON.dependencies &&
+    TargetPackageJSON.dependencies[Package]
+  ) {
+    return "dependency";
+  }
+  //devDependency
+  if (
+    TargetPackageJSON.devDependencies &&
+    TargetPackageJSON.devDependencies[Package]
+  ) {
+    return "devDependency";
+  }
+  return "dependency";
+}
+
 export async function GenerateLockFileAtCwd(cwd?: string) {
   cwd = cwd || process.cwd();
   await AddLockFileToCwd(cwd);
@@ -304,6 +331,7 @@ export async function GenerateLockFileAtCwd(cwd?: string) {
       fs.readFileSync(path.join(cwd, "lpm.lock")).toString()
     );
     */
+    const CWDPackageJSON = await ReadPackageJSON(cwd);
     const LPMPackagesJSON = await ReadLPMPackagesJSON();
     const LOCK: LOCKFILE = {
       pkgs: {},
@@ -319,6 +347,18 @@ export async function GenerateLockFileAtCwd(cwd?: string) {
               resolve: PackageData.resolve,
               // pm: PreviousInLock.pm || undefined,
             };
+
+            //setting the dependency scope (dependency, devDependency, peerDependency, etc...)
+            if (
+              CWDPackageJSON.success &&
+              CWDPackageJSON.result !== undefined &&
+              typeof CWDPackageJSON.result !== "string"
+            ) {
+              LOCK.pkgs[Package].dependencyScope = GetPackageDependencyScope(
+                Package,
+                CWDPackageJSON.result
+              );
+            }
 
             //updating .bin files to use relative paths and not symlink paths.
             try {
@@ -360,7 +400,6 @@ export async function GenerateLockFileAtCwd(cwd?: string) {
                         bindir,
                         path.join(PackageData.resolve, binSource)
                       );
-                    // console.log(BinSourceFileRelativeToNodeModulesBin);
                     const SEARCH_NODE_EXE_IF = `"%~dp0\\node.exe"  "%~dp0${BinSourceFileRelativeToNodeModulesBin}" %*`;
                     const REPLACE_NODE_EXE_IF = `"%~dp0\\node.exe --preserve-symlinks --preserve-symlinks-main "  "%~dp0${ExecutableSourceFileInNodeModules}" %*`;
                     const SEARCH_NODE_EXE_ELSE = `node  "%~dp0${BinSourceFileRelativeToNodeModulesBin}" %*`;
@@ -395,9 +434,8 @@ export async function GenerateLockFileAtCwd(cwd?: string) {
         logreport.error("Failed to edit .bin files " + e);
       }
       */
-
-      await AddLockFileToCwd(cwd, LOCK);
     }
+    await AddLockFileToCwd(cwd, LOCK);
   } catch (e) {
     logreport.error("Failed to generate lock file " + e);
   }

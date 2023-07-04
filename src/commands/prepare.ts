@@ -80,10 +80,18 @@ export default class preprare {
         this.Prepare(options);
       })
       .command("safe-production")
+      .option(
+        "-w, --warn [boolean]",
+        "Warn if local registry dependencies are being used instead of prompting for change."
+      )
+      .option(
+        "-e, --error [boolean]",
+        "Error if local registry dependencies are being used instead of prompting for change."
+      )
       .description(
         "Makes sure that no development dependencies are in package.json, if there's any it prompt to prepare for production."
       )
-      .action(async () => {
+      .action(async (Options: { warn?: boolean; error?: boolean }) => {
         const LockFile = await ReadLockFileFromCwd();
         const PackageJSON = await ReadPackageJSON(process.cwd());
         if (!PackageJSON.success || typeof PackageJSON.result === "string") {
@@ -93,20 +101,29 @@ export default class preprare {
         const InDevModePackages: string[] = [];
         for (const pkg in LockFile.pkgs) {
           const InJSON = PackageJSON.result?.dependencies?.[pkg];
-          if (InJSON === LockFile.pkgs[pkg].resolve) {
+          if (InJSON === "link:" + LockFile.pkgs[pkg].resolve) {
             InDevModePackages.push(InJSON);
           }
         }
         if (InDevModePackages.length > 0) {
+          const msg =
+            InDevModePackages.length +
+            " " +
+            ((InDevModePackages.length > 1 && "dependencies are") ||
+              "dependency is") +
+            ` using local registry files.\n\n${InDevModePackages.join("\n")}`;
+          if (Options.error) {
+            logreport.error(msg);
+            return;
+          }
+          if (Options.warn) {
+            logreport.warn(msg);
+            return;
+          }
           await prompt<{ run_safe: boolean }>({
             name: "run_safe",
             initial: true,
-            message: `${InDevModePackages.length} ${
-              (InDevModePackages.length > 1 && "dependencies are") ||
-              "dependency is"
-            } using local registry files, Should we prepare for production?\n\n${InDevModePackages.join(
-              "\n"
-            )}\n\n`,
+            message: msg + "\n\nShould we prepare for production?",
             type: "confirm",
           })
             .then(async (res) => {
@@ -129,6 +146,12 @@ export default class preprare {
                   err
               );
             });
+        } else {
+          logreport(
+            "Your package 📦 is already ready for production 🚀",
+            "log",
+            true
+          );
         }
         // PackageJSON.result?.dependencies
         // PackageJSON.result.console.log(LockFile);

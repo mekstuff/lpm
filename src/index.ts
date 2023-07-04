@@ -4,6 +4,7 @@ import { Command } from "commander";
 import commands from "./commands/index.js";
 import { ReadLockFileFromCwd } from "./utils/lpmfiles.js";
 import { AddOptions } from "./commands/add.js";
+import logreport from "./utils/logreport.js";
 
 const program = new Command();
 
@@ -31,6 +32,10 @@ program.action(async (Options: AddOptions) => {
   let ToCallInstall: string[] = [];
   for (const Package in pkgs) {
     ToCallInstall.push(Package);
+  }
+
+  if (ToCallInstall.length === 0) {
+    return logreport("Nothing to install.", "log", true);
   }
 
   ToCallInstall = [...ToCallInstall, ...Flags];
