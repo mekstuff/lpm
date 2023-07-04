@@ -8,7 +8,7 @@ import {
   GetLPMPackagesJSON,
   ReadLPMPackagesJSON,
 } from "../utils/lpmfiles.js";
-import { exec, execSync } from "child_process";
+import { execSync } from "child_process";
 
 export interface AddOptions {
   packageManager?: SUPPORTED_PACKAGE_MANAGERS;
