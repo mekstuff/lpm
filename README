@@ -1,0 +1,11 @@
+## Preserving symlinks
+
+It may be required to use preserve symlinks for some programs to work properly. For e.g with typescript you may need to pass the
+`--preserveSymlink` flag or with node `--preserve-symlinks` && `preserve-symlinks-main`.
+
+For executing symlink binaries, `lpm` automatically changes the source file to have these preserve links flags so you don't have to worry about that. But for cases for external tools like `typescript`, you need to manually pass these flags.
+
+Common programs with preserve flag
+
+`node --preserve-symlinks --preserve-symlinks-main ...`
+`npx --preserveSymlinks ...`
