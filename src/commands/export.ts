@@ -15,6 +15,7 @@ export default class EXPORT {
         "Expected an array of strings for files, got " + typeof files
       );
     }
+    console.log(options.scope);
     logreport.assert(typeof options.scope === "string", "Not a valid scope");
     files.forEach(async (file, index) => {
       const ResolvedPath = path.resolve(file);
@@ -84,7 +85,7 @@ export default class EXPORT {
     program
       .command("export <files...>")
       .option(
-        "-s, --scope",
+        "-s, --scope [string]",
         "A scope to publish the files under, defaults to '@exports'",
         "@exports"
       )
