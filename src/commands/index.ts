@@ -11,6 +11,9 @@ import * as hook from "./hook.js";
 
 import * as backup from "./backup.js";
 
+import * as _import from "./import.js";
+import * as _export from "./export.js";
+
 const commands = {
   add,
   remove,
@@ -20,6 +23,8 @@ const commands = {
   prepare,
   hook,
   backup,
+  _import,
+  _export,
 };
 
 export default commands;

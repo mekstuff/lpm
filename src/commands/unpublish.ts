@@ -5,6 +5,7 @@ import { ReadPackageJSON } from "../utils/PackageReader.js";
 import {
   CreateLPMPackageDirectory,
   GetLPMPackagesDirectory,
+  ReadLPMPackagesJSON,
   RemoveLPMPackageDirectory,
   RemovePackagesFromLPMJSON,
 } from "../utils/lpmfiles.js";
@@ -26,7 +27,7 @@ export default class unpublish extends pack {
       `Unpublishing ${result?.name} ${result?.version}`,
       "UNPUBLISH"
     );
-    const packageinlpmdir = await CreateLPMPackageDirectory(result.name);
+    const packageinlpmdir = await CreateLPMPackageDirectory(result.name); //remove...
     await RemovePackagesFromLPMJSON([result.name]).then((removed) => {
       if (!removed) {
         logreport(
@@ -49,12 +50,39 @@ export default class unpublish extends pack {
 
     logreport.endelapse("UNPUBLISH");
   }
+
+  async UnRegister(packages: string[]) {
+    logreport.logwithelapse("Unregistering packages...", "UNREGISTER");
+    const RegisteredPackages = await ReadLPMPackagesJSON();
+    packages.forEach(async (Package) => {
+      if (!RegisteredPackages.packages[Package]) {
+        logreport.error(
+          Package + " was not discovered as a published package."
+        );
+      }
+    });
+    //remove from JSON
+    logreport.logwithelapse("Removing from global packages...", "UNREGISTER");
+    await RemovePackagesFromLPMJSON(packages);
+    //remove tarbals
+    logreport.logwithelapse("Removing files...", "UNREGISTER");
+    packages.forEach(async (pkg) => {
+      await RemoveLPMPackageDirectory(pkg);
+    });
+    logreport.logwithelapse("Unregistered packages", "UNREGISTER", true);
+  }
   build(program: typeof CommanderProgram) {
     program
       .command("unpublish [packagePath]")
       .description("Unpublishes your package to the local registry.")
       .action(async (packagePath) => {
         this.Unpublish(packagePath);
+      });
+    program
+      .command("unregister <packages...>")
+      .description("Unpublishes the given packages by their names.")
+      .action(async (packages) => {
+        this.UnRegister(packages);
       });
   }
   constructor() {

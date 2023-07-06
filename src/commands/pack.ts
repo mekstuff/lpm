@@ -78,7 +78,9 @@ export default class pack {
     packagePath: string | undefined,
     Options: PackOptions
   ): Promise<string | undefined> {
-    packagePath = packagePath || ".";
+    if (packagePath === undefined) {
+      packagePath = ".";
+    }
     logreport.logwithelapse(`Fetching Information "${packagePath}"...`, "PACK");
     const { success, result } = await ReadPackageJSON(packagePath);
     if (!success) {
@@ -111,7 +113,7 @@ export default class pack {
     if (MapPack) {
       const Pack: string[] = [];
       MapPack.forEach((v) => {
-        Pack.push(v);
+        Pack.push(path.relative(packagePath as string, v));
       });
       try {
         tar.c(
@@ -128,7 +130,8 @@ export default class pack {
     } else {
       logreport.error("Did not get files to pack.");
     }
-    const outpath = path.resolve(path.join(packagePath, Options.out));
+    // const outpath = path.resolve(path.join(packagePath, Options.out));
+    const outpath = path.resolve(Options.out);
     logreport.logwithelapse(`Packaged => "${outpath}"`, "PACK", true);
     return outpath;
   }

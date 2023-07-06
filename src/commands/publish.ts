@@ -53,6 +53,7 @@ export default class publish extends pack {
       }
     }
     const packageinlpmdir = await CreateLPMPackageDirectory(result.name);
+
     await AddPackagesToLPMJSON([
       { name: result.name, resolve: path.join(packageinlpmdir, "pkg") },
     ]).then((added) => {
@@ -62,6 +63,7 @@ export default class publish extends pack {
         );
       }
     });
+
     const tarbaldir = await this.Pack(packagePath, {
       out: path.join(
         await GetLPMPackagesDirectory(),
@@ -80,6 +82,7 @@ export default class publish extends pack {
         sync: true,
       });
     } catch (err) {
+      console.log(err);
       logreport.error("Failed to publish " + err);
     }
 
