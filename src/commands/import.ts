@@ -12,6 +12,7 @@ export default class IMPORT {
     const LPMPackages = await ReadLPMPackagesJSON();
     const LinkDirs: { name: string; resolve: string }[] = [];
     Packages.forEach((pkg) => {
+      pkg = "@_exports/" + pkg;
       if (!LPMPackages.packages[pkg]) {
         logreport.error(`"${pkg}" was not found as a published package.`);
       } else {

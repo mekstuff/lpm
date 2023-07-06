@@ -9,13 +9,15 @@ import { program as CommanderProgram } from "commander";
 import { GetLPMPackagesDirectory } from "../utils/lpmfiles.js";
 
 export default class EXPORT {
-  async export(files: string[], options: { scope: string }) {
+  async export(files: string[], options: { scope?: string }) {
     if (!Array.isArray(files)) {
       logreport.error(
         "Expected an array of strings for files, got " + typeof files
       );
     }
-    logreport.assert(typeof options.scope === "string", "Not a valid scope");
+    if (options.scope !== undefined) {
+      logreport.assert(typeof options.scope === "string", "Not a valid scope");
+    }
     files.forEach(async (file, index) => {
       const ResolvedPath = path.resolve(file);
       const FileExists = fs.existsSync(ResolvedPath);
@@ -30,7 +32,10 @@ export default class EXPORT {
       if (BaseName === "package") {
         logreport.error("The name 'package' cannot be used to export.");
       }
-      const PackageName = options.scope + "/" + path.parse(BaseName).name;
+      const PackageName =
+        "@_exports/" +
+        (options.scope ? options.scope + "/" : "") +
+        path.parse(BaseName).name;
       logreport(
         `Exporting ${file} as ${chalk.bold(chalk.cyan(PackageName))} [${
           index + 1
@@ -85,8 +90,7 @@ export default class EXPORT {
       .command("export <files...>")
       .option(
         "-s, --scope [string]",
-        "A scope to publish the files under, defaults to '@exports'",
-        "@exports"
+        "A scope to publish the files under, all exports are under a '@_exports'. --scope='@myscope' results in @_exports/@myscope/..."
       )
       .description(
         "publishes a file/directory that is not meant to be published to a registry but instead as reusable component."
