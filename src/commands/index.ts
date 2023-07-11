@@ -11,6 +11,8 @@ import * as hook from "./hook.js";
 
 import * as backup from "./backup.js";
 
+import * as watch from "./watch.js";
+
 import * as _import from "./import.js";
 import * as _export from "./export.js";
 
@@ -23,6 +25,7 @@ const commands = {
   prepare,
   hook,
   backup,
+  watch,
   _import,
   _export,
 };
