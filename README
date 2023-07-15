@@ -8,4 +8,4 @@ For executing symlink binaries, `lpm` automatically changes the source file to h
 Common programs with preserve flag
 
 `node --preserve-symlinks --preserve-symlinks-main ...`
-`npx --preserveSymlinks ...`
+`npx tsc --preserveSymlinks ...`
