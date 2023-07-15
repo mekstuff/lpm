@@ -18,7 +18,10 @@ export default class preprare {
         "Must provide either `--production` or `--dev` flag set when calling `prepare`."
       );
     }
-    const LockFile = await ReadLockFileFromCwd();
+    const LockFile = await ReadLockFileFromCwd(undefined, true);
+    if (LockFile === undefined) {
+      process.exit();
+    }
     const PackageFile = await ReadPackageJSON(process.cwd());
     if (
       !PackageFile.success ||
@@ -59,11 +62,11 @@ export default class preprare {
       logreport("Ready For Production 🚀", "log", true);
     } else {
       for (const lockpkg in LockFile.pkgs) {
+        logreport(`${chalk.green(lockpkg)} ✓`);
         PackageFile.result.dependencies[lockpkg] =
           "link:" + LockFile.pkgs[lockpkg].resolve;
-
-        logreport("Ready For Development 🚧", "log", true);
       }
+      logreport("Ready For Development 🚧", "log", true);
     }
     await WritePackageJSON(
       process.cwd(),
@@ -92,7 +95,10 @@ export default class preprare {
         "Makes sure that no development dependencies are in package.json, if there's any it prompt to prepare for production."
       )
       .action(async (Options: { warn?: boolean; error?: boolean }) => {
-        const LockFile = await ReadLockFileFromCwd();
+        const LockFile = await ReadLockFileFromCwd(undefined, true);
+        if (LockFile === undefined) {
+          process.exit();
+        }
         const PackageJSON = await ReadPackageJSON(process.cwd());
         if (!PackageJSON.success || typeof PackageJSON.result === "string") {
           return logreport.error("Could not read package.json");

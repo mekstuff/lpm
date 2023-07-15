@@ -265,11 +265,19 @@ interface LOCKFILE {
   pkgs: { [key: string]: LOCKFILEPKG };
 }
 
-export async function ReadLockFileFromCwd(cwd?: string): Promise<LOCKFILE> {
+export async function ReadLockFileFromCwd(
+  cwd?: string,
+  warnNoExist?: boolean
+): Promise<LOCKFILE> {
   cwd = cwd || ".";
   try {
     if (!fs.existsSync(path.join(cwd, "lpm.lock"))) {
-      logreport.error(`No lock file exists in ${path.resolve(cwd)}.`);
+      if (warnNoExist) {
+        logreport.warn(`No lock file exists in ${path.resolve(cwd)}.`);
+        return undefined as unknown as LOCKFILE;
+      } else {
+        logreport.error(`No lock file exists in ${path.resolve(cwd)}.`);
+      }
     }
     return JSON.parse(fs.readFileSync(path.join(cwd, "lpm.lock"), "utf8"));
   } catch (e) {
