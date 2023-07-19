@@ -5,7 +5,6 @@ import logreport from "../utils/logreport.js";
 import { program as CommanderProgram } from "commander";
 import { ReadPackageJSON } from "../utils/PackageReader.js";
 import { execSync } from "child_process";
-import { ReadLockFileFromCwd } from "../utils/lpmfiles.js";
 
 interface PackOptions {
   out?: string;
@@ -84,7 +83,6 @@ async function GetPackageFiles(PackagePath: string, packageJson: object) {
       files.set(e, e);
     }
   });
-  console.log(files);
   return files;
 }
 
@@ -156,7 +154,9 @@ export default class pack {
       .option("-o, --out", "Where to put tar file.")
       .option("--no-scripts [boolean]", "Running any pack related scripts.")
       //   .option("-p, --packer", "What package manager to use to package.")
-      .description("Packs package to be prepared to publish.")
+      .description(
+        "Packs package to be prepared to publish. (this command is meant to be used internally but is exposed to cli if required)"
+      )
       .action((packagePath, options) => {
         this.Pack(packagePath, options);
       });

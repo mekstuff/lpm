@@ -1,13 +1,18 @@
 import fs from "fs";
+import tar from "tar";
 import path from "path";
 import enqpkg from "enquirer";
 const { prompt } = enqpkg;
 import { program as CommanderProgram } from "commander";
-import { GetLPMPackagesDirectory } from "../utils/lpmfiles.js";
+import {
+  CreateTemporaryFolder,
+  GetLPMPackagesDirectory,
+} from "../utils/lpmfiles.js";
 import logreport from "../utils/logreport.js";
 import { PackageFile, ReadPackageJSON } from "../utils/PackageReader.js";
 import chalk from "chalk";
 import { execSync } from "child_process";
+import { getcommand } from "../index.js";
 
 export default class runrelease {
   async RunRelease(
@@ -103,20 +108,74 @@ export default class runrelease {
       logreport.error(e);
       process.exit(1);
     });
-
+    const temp = await CreateTemporaryFolder();
     for (const x of pubinfo) {
       try {
-        execSync(commandprompt.cmd, { cwd: x.path, stdio: "inherit" });
+        const bn = path.basename(x.path);
+        const tempPath = path.join(temp.path, bn);
+        /**
+         * We copy the published file since we perform changes before publishing to registry, we don't want these changes to
+         * trigger recompiling to packages that have it installed
+         *
+         * Also we can just remove it after instead of trying to revert changes.
+         */
+        fs.cpSync(x.path, tempPath, {
+          recursive: true,
+        });
+        /**
+         * Prepare for production
+         */
+        const PrepareCommand = getcommand("prepare");
+        await PrepareCommand.Prepare(
+          {
+            production: true,
+          },
+          path.join(tempPath, "pkg")
+        );
+
+        /**
+         * Remove lpm.lock from temp package.
+         */
+        if (fs.existsSync(path.join(tempPath, "pkg", "lpm.lock"))) {
+          fs.rmSync(path.join(tempPath, "pkg", "lpm.lock"));
+        }
+        /**
+         * We rename to 'package' from 'pkg' to match npm pack, this probably isn't needed.
+         */
+        fs.renameSync(
+          path.join(tempPath, "pkg"),
+          path.join(tempPath, "package")
+        );
+        /**
+         * Archive
+         */
+        tar.c(
+          {
+            cwd: tempPath,
+            file: path.resolve(path.join(tempPath, "publish.tgz")),
+            sync: true,
+          },
+          ["package"]
+        );
+
+        /**
+         * Remove the `lpm.lock` from the temp file so it doesn't publish it.
+         */
+        if (options.command && options.command !== "") {
+          execSync(commandprompt.cmd, { cwd: tempPath, stdio: "inherit" });
+        }
       } catch (e) {
-        const err = `Failed to execute "${commandprompt.cmd}" on ${x.packagejson.name}.`;
+        const err = `Failed to execute "${commandprompt.cmd}" on ${x.packagejson.name}. => ${e}`;
         if (options.warnErrors) {
           logreport(err, "warn", true);
         } else {
+          temp.done();
           logreport.error(err);
           process.exit(1);
         }
       }
     }
+    temp.done();
   }
 
   build(program: typeof CommanderProgram) {
@@ -124,8 +183,9 @@ export default class runrelease {
       .command("run-release <scope>")
       .option(
         "-c, --command",
-        "The publish command to execute on each tarbal.",
-        "echos 'hello world'"
+        "The publish command to execute on each tarbal. The publish ready tarbal is stored as 'publish.tgz'",
+        "echo ''"
+        // "npm publish publish.tgz --no-scripts"
       )
       .option(
         "--warn-errors",

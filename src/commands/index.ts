@@ -3,6 +3,8 @@ import * as remove from "./remove.js";
 import * as publish from "./publish.js";
 import * as unpublish from "./unpublish.js";
 
+import * as pack from "./pack.js";
+
 import * as list from "./list.js";
 
 import * as prepare from "./prepare.js";
@@ -25,6 +27,7 @@ const commands = {
   remove,
   publish,
   unpublish,
+  pack,
   list,
   prepare,
   hook,

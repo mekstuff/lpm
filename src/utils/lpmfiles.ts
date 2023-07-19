@@ -1,11 +1,31 @@
 import os from "os";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 import logreport from "./logreport.js";
 import { BackUpLPMPackagesJSON } from "../commands/backup.js";
 import { PackageFile, ReadPackageJSON } from "./PackageReader.js";
 
 const LPM_DIR = path.join(os.homedir(), ".local-package-manager");
+
+interface ITempFolderObject {
+  path: string;
+  done: () => void;
+}
+/**
+ * Creates an empty folder within lpm dir
+ */
+export async function CreateTemporaryFolder(): Promise<ITempFolderObject> {
+  const id = crypto.randomBytes(16).toString("hex");
+  const p = path.join(os.tmpdir(), "lpm-" + id);
+  fs.mkdirSync(p, { recursive: true });
+  return {
+    path: p,
+    done: () => {
+      fs.rmSync(p, { recursive: true, force: true });
+    },
+  };
+}
 
 export async function CreateLPMPackageDirectory(
   PackageName: string

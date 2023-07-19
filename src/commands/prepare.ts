@@ -5,9 +5,14 @@ import { ReadPackageJSON, WritePackageJSON } from "../utils/PackageReader.js";
 import enqpkg from "enquirer";
 import chalk from "chalk";
 const { prompt } = enqpkg;
+import LogTree, { Tree } from "console-log-tree";
 
 export default class preprare {
-  async Prepare(Options: { production?: boolean; dev?: boolean }) {
+  async Prepare(
+    Options: { production?: boolean; dev?: boolean },
+    packageDirectory?: string
+  ) {
+    packageDirectory = packageDirectory || process.cwd();
     if (Options.production && Options.dev) {
       logreport.error(
         "Both `--production` & `--dev` flags cannot be set while calling `prepare`."
@@ -18,11 +23,11 @@ export default class preprare {
         "Must provide either `--production` or `--dev` flag set when calling `prepare`."
       );
     }
-    const LockFile = await ReadLockFileFromCwd(undefined, true);
+    const LockFile = await ReadLockFileFromCwd(packageDirectory, true);
     if (LockFile === undefined) {
-      process.exit();
+      return;
     }
-    const PackageFile = await ReadPackageJSON(process.cwd());
+    const PackageFile = await ReadPackageJSON(packageDirectory);
     if (
       !PackageFile.success ||
       typeof PackageFile.result === "string" ||
@@ -30,6 +35,9 @@ export default class preprare {
     ) {
       return logreport.error("Could not access package.json");
     }
+    const tree: Tree[] = [];
+    const subTreeChildren: Tree[] = [];
+
     PackageFile.result.dependencies = PackageFile.result.dependencies || {};
     if (Options.production) {
       for (const lockpkg in LockFile.pkgs) {
@@ -50,26 +58,33 @@ export default class preprare {
             `Published package does not have "version" field. => ${lockpkg} => ${LockFile.pkgs[lockpkg].resolve}`
           );
         }
-
-        logreport(
-          `${chalk.green(lockpkg)} => ${chalk.green(
-            PackageFile.result.version
-          )}`
-        );
-        PackageFile.result.dependencies[lockpkg] = PackageFile.result
-          .version as string;
+        subTreeChildren.push({
+          name: `${chalk.green(lockpkg)} => ${chalk.green(
+            "^" + pkgjson.result.version
+          )}`,
+        });
+        PackageFile.result.dependencies[lockpkg] = ("^" +
+          pkgjson.result.version) as string;
       }
-      logreport("Ready For Production 🚀", "log", true);
     } else {
       for (const lockpkg in LockFile.pkgs) {
-        logreport(`${chalk.green(lockpkg)} ✓`);
+        subTreeChildren.push({
+          name: `${chalk.green(lockpkg)} ✓`,
+        });
         PackageFile.result.dependencies[lockpkg] =
           "link:" + LockFile.pkgs[lockpkg].resolve;
       }
-      logreport("Ready For Development 🚧", "log", true);
     }
+    tree.push({
+      name: PackageFile.result.name as string,
+      children: subTreeChildren,
+    });
+    const prefix = Options.production
+      ? "Ready For Production 🚀"
+      : "Ready For Development 🚧";
+    logreport(prefix + "\n" + LogTree.parse(tree));
     await WritePackageJSON(
-      process.cwd(),
+      packageDirectory,
       JSON.stringify(PackageFile.result, null, 2)
     );
   }
