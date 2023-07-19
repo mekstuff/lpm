@@ -5,6 +5,7 @@ import logreport from "../utils/logreport.js";
 import { program as CommanderProgram } from "commander";
 import { ReadPackageJSON } from "../utils/PackageReader.js";
 import { execSync } from "child_process";
+import { ReadLockFileFromCwd } from "../utils/lpmfiles.js";
 
 interface PackOptions {
   out?: string;
@@ -15,8 +16,21 @@ async function GetPackageFiles(PackagePath: string, packageJson: object) {
   logreport.assert(PackagePath !== undefined, "Package Path Not Passed.");
   logreport.assert(packageJson !== undefined, "Package JSON Not Passed.");
 
+  /**
+   * We must include `lpm.lock` for when we do lpm run-release it will make sure all packages are set to versions instead of link paths.
+   */
   const MUST_INCLUDE = ["package.json"];
   let MUST_EXCLUDE = [".gitignore", "node_modules", "yarn-error.log"];
+
+  /**
+   * We must include `lpm.lock` for when we do lpm run-release it will make sure all packages are set to versions instead of link paths.
+   */
+  try {
+    const LOCK = fs.existsSync(path.join(PackagePath, "lpm.lock"));
+    if (LOCK) {
+      MUST_INCLUDE.push("lpm.lock");
+    }
+  } catch (e) {}
   // adding ignore files from .gitignore
   try {
     const HasGitIgnore = fs.readFileSync(
@@ -70,6 +84,7 @@ async function GetPackageFiles(PackagePath: string, packageJson: object) {
       files.set(e, e);
     }
   });
+  console.log(files);
   return files;
 }
 
