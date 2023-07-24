@@ -364,7 +364,7 @@ export async function GenerateLockFileAtCwd(cwd?: string) {
     const LOCK: LOCKFILE = {
       pkgs: {},
     };
-    const bindir = path.join(cwd, "node_modules", ".bin");
+    // const bindir = path.join(cwd, "node_modules", ".bin");
     for (const Package in LPMPackagesJSON.packages) {
       // const PreviousInLock =(PreviousLockfileData.pkgs && PreviousLockfileData.pkgs[Package]) || {};
       const PackageData = LPMPackagesJSON.packages[Package];

@@ -32,48 +32,54 @@ program.action(async () => {
   if (typeof binary !== "string") {
     logreport.error("Invalid binary name => " + binary);
   }
-  if (!fs.existsSync(nm)) {
-    logreport.error("node_modules not found in directory. => " + nm);
-    process.exit(1);
-  }
-  const BinPath = path.join(nm, ".bin");
-  if (!fs.existsSync(BinPath)) {
-    logreport.error(`"${binary}" was not found`);
-    process.exit(1);
-  }
-  const filePath = path.join(BinPath, binary + ".cmd");
-  if (!fs.existsSync(filePath)) {
-    logreport.error(`"${binary}" was not found`);
-    process.exit(1);
-  }
-  try {
-    const fr = fs.readFileSync(filePath, "utf8");
-    const executableRes = fr.match(/node\s+"%~dp0\\(.+)"/);
-    if (!executableRes) {
-      logreport.error(
-        "Could not get executable path from bin source. Got null."
-      );
+  let res: string | undefined;
+  const IsExecutablePath = path.extname(binary) === "" ? false : true;
+  if (!IsExecutablePath) {
+    if (!fs.existsSync(nm)) {
+      logreport.error("node_modules not found in directory. => " + nm);
       process.exit(1);
     }
-    const res =
-      executableRes[1] &&
-      path.resolve(path.join("node_modules", "_", executableRes[1])); //have to add _ to join because for some reason it doesn't include node_modules if it's the only argument passed.
-    if (!res) {
-      logreport.error(executableRes);
+    const BinPath = path.join(nm, ".bin");
+    if (!fs.existsSync(BinPath)) {
+      logreport.error(`"${binary}" was not found`);
       process.exit(1);
     }
-    const cmd = `node --preserve-symlinks --preserve-symlinks-main ${res} ${Flags.join(
-      " "
-    )}`;
+    const filePath = path.join(BinPath, binary + ".cmd");
+    if (!fs.existsSync(filePath)) {
+      logreport.error(`"${binary}" was not found`);
+      process.exit(1);
+    }
     try {
-      // console.log(cmd);
-      execSync(cmd, { stdio: "inherit" });
+      const fr = fs.readFileSync(filePath, "utf8");
+      const executableRes = fr.match(/node\s+"%~dp0\\(.+)"/);
+      if (!executableRes) {
+        logreport.error(
+          "Could not get executable path from bin source. Got null."
+        );
+        process.exit(1);
+      }
+      res =
+        executableRes[1] &&
+        path.resolve(path.join("node_modules", "_", executableRes[1])); //have to add _ to join because for some reason it doesn't include node_modules if it's the only argument passed.
+      if (!res) {
+        logreport.error(executableRes);
+        process.exit(1);
+      }
     } catch (e) {
-      logreport.error("Command failed " + e);
-      process.exit(1);
+      logreport.error("Something went wrong => " + e);
     }
+  } else {
+    res = binary;
+  }
+
+  const cmd = `node --preserve-symlinks --preserve-symlinks-main ${res} ${Flags.join(
+    " "
+  )}`;
+  try {
+    execSync(cmd, { stdio: "inherit" });
   } catch (e) {
-    logreport.error("Something went wrong => " + e);
+    logreport.error("Command failed " + e);
+    process.exit(1);
   }
 });
 
