@@ -12,7 +12,7 @@ import logreport from "../utils/logreport.js";
 import { PackageFile, ReadPackageJSON } from "../utils/PackageReader.js";
 import chalk from "chalk";
 import { execSync } from "child_process";
-import { getcommand } from "../index.js";
+import { getcommand } from "../lpm.js";
 
 export default class runrelease {
   async RunRelease(

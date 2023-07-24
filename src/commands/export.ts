@@ -4,7 +4,7 @@ import path from "path";
 import chalk from "chalk";
 import crypto from "crypto";
 import logreport from "../utils/logreport.js";
-import { getcommand } from "../index.js";
+import { getcommand } from "../lpm.js";
 import { program as CommanderProgram } from "commander";
 import { GetLPMPackagesDirectory } from "../utils/lpmfiles.js";
 

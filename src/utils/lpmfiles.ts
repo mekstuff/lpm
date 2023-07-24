@@ -389,6 +389,7 @@ export async function GenerateLockFileAtCwd(cwd?: string) {
             }
 
             //updating .bin files to use relative paths and not symlink paths.
+            /* disabled since the introduction of lpx.
             try {
               const Read = await ReadPackageJSON(PackageData.resolve);
               if (!Read.success) {
@@ -446,6 +447,7 @@ export async function GenerateLockFileAtCwd(cwd?: string) {
             } catch (err) {
               logreport.warn("Could not update .bin files => " + err);
             }
+            */
           }
         }
       });

@@ -5,7 +5,8 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "lpm": "dist/index.js"
+    "lpm": "dist/lpm.js",
+    "lpx": "dist/lpx.js"
   },
   "dependencies": {
     "chalk": "^5.3.0",
