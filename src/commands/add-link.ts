@@ -19,7 +19,7 @@ export function GetPreferredPackageManager(): AddOptions["packageManager"] {
   return "yarn";
 }
 
-export default class Add {
+export default class AddLink {
   async Add(Arg0: string[], Options: AddOptions) {
     if (!Options.packageManager) {
       Options.packageManager = GetPreferredPackageManager();
@@ -138,10 +138,10 @@ export default class Add {
   }
   build(program: typeof CommanderProgram) {
     program
-      .command("add <packages...>")
+      .command("addlink <packages...>")
       .allowUnknownOption(true)
       .description(
-        "Add a package to your project. Any Unknown Options will be sent to the package manager."
+        "Add a package to your project by using link: protocol (refer to add instead since addlink can result unwanted behaviour). Any Unknown Options will be sent to the package manager."
       )
       .option("-pm, --package-manager [string]", "The package manager to use.")
       .option(

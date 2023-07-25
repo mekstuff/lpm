@@ -3,7 +3,7 @@
 import { Command } from "commander";
 import commands from "./commands/index.js";
 import { ReadLockFileFromCwd } from "./utils/lpmfiles.js";
-import { AddOptions } from "./commands/add.js";
+import { AddOptions } from "./commands/add-link.js";
 import logreport from "./utils/logreport.js";
 
 const program = new Command();

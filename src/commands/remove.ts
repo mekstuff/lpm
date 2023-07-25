@@ -1,7 +1,7 @@
 import chalk from "chalk";
 import { program as CommanderProgram } from "commander";
 import { SUPPORTED_PACKAGE_MANAGERS } from "../utils/CONSTANTS.js";
-import { GetPreferredPackageManager } from "./add.js";
+import { GetPreferredPackageManager } from "./add-link.js";
 import logreport from "../utils/logreport.js";
 import {
   GenerateLockFileAtCwd,

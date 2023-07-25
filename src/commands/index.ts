@@ -1,4 +1,4 @@
-import * as add from "./add.js";
+import * as addlink from "./add-link.js";
 import * as remove from "./remove.js";
 import * as publish from "./publish.js";
 import * as unpublish from "./unpublish.js";
@@ -23,7 +23,7 @@ import * as _import from "./import.js";
 import * as _export from "./export.js";
 
 const commands = {
-  add,
+  addlink,
   remove,
   publish,
   unpublish,
