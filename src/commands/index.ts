@@ -1,9 +1,15 @@
+import * as add from "./add.js";
 import * as addlink from "./add-link.js";
 import * as remove from "./remove.js";
 import * as publish from "./publish.js";
 import * as unpublish from "./unpublish.js";
 
+import * as push from "./push.js";
+import * as pull from "./pull.js";
+
 import * as pack from "./pack.js";
+
+import * as open from "./open.js";
 
 import * as list from "./list.js";
 
@@ -23,11 +29,15 @@ import * as _import from "./import.js";
 import * as _export from "./export.js";
 
 const commands = {
+  add,
   addlink,
   remove,
   publish,
   unpublish,
+  push,
+  pull,
   pack,
+  open,
   list,
   prepare,
   hook,

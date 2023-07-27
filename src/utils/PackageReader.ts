@@ -15,14 +15,30 @@ export type PackageFile = Partial<PackageFileRequired>;
 
 export async function ReadPackageJSON(
   PackagePath: string,
-  JsonFileName?: string
+  JsonFileName?: string,
+  CreateOnNonExist?: boolean
 ): Promise<{ success: boolean; result: string | PackageFile }> {
   JsonFileName = JsonFileName || "package.json";
   const JSONPath = path.join(PackagePath, JsonFileName);
   const pathExists = fs.existsSync(JSONPath);
-  if (!pathExists) {
+  if (!pathExists && !CreateOnNonExist) {
     logreport.warn(`"${JSONPath}" does not exist in path.`);
     return { success: false, result: `"${JSONPath}" does not exist in path.` };
+  }
+  if (!pathExists && CreateOnNonExist) {
+    try {
+      const write = {};
+      fs.writeFileSync(JSONPath, JSON.stringify(write), "utf8");
+      return {
+        success: true,
+        result: write,
+      };
+    } catch (err) {
+      logreport.error(
+        "Could not create package json file => " + JSONPath + ". Error: " + err
+      );
+      process.exit(1);
+    }
   }
   try {
     const value = fs.readFileSync(JSONPath);

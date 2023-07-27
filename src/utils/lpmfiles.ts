@@ -5,6 +5,7 @@ import crypto from "crypto";
 import logreport from "./logreport.js";
 import { BackUpLPMPackagesJSON } from "../commands/backup.js";
 import { PackageFile, ReadPackageJSON } from "./PackageReader.js";
+import chalk from "chalk";
 
 const LPM_DIR = path.join(os.homedir(), ".local-package-manager");
 
@@ -171,9 +172,17 @@ export async function WriteLPMPackagesJSON(
   return wrote;
 }
 
-type ILPMPackagesJSON_Package = { resolve: string; installations: string[] };
+type ILPMPackagesJSON_Package = {
+  resolve: string;
+  installations: string[];
+  publish_sig: string;
+};
 interface ILPMPackagesJSON {
   packages: { [key: string]: ILPMPackagesJSON_Package };
+}
+
+function GeneratePublishSignatureCode(): string {
+  return crypto.randomBytes(3).toString("hex") + ".pbshsig";
 }
 
 export async function AddPackagesToLPMJSON(
@@ -187,6 +196,7 @@ export async function AddPackagesToLPMJSON(
       const NewData: ILPMPackagesJSON_Package = {
         resolve: pkg.resolve,
         installations: (ExistingPkgData && ExistingPkgData.installations) || [],
+        publish_sig: GeneratePublishSignatureCode(),
       };
 
       LPMPackagesJSON.packages[pkg.name] = NewData;
@@ -259,7 +269,8 @@ export async function RemoveInstallationsToGlobalPackage(
     const TargetPackage = LPMPackagesJSON.packages[packageName];
     if (!TargetPackage) {
       logreport.error(
-        `${packageName} was not found in the local package registry.`
+        `${packageName} was not found in the local package registry.`,
+        true
       );
     }
     TargetPackage.installations = TargetPackage.installations.filter((e) => {
@@ -275,6 +286,7 @@ export async function RemoveInstallationsToGlobalPackage(
 //LOCK
 type LOCKFILEPKG = {
   resolve: string;
+  publish_sig: string;
   dependencyScope?:
     | "peerDependency"
     | "devDependency"
@@ -350,15 +362,27 @@ function GetPackageDependencyScope(
   return "dependency";
 }
 
-export async function GenerateLockFileAtCwd(cwd?: string) {
+export type RequireFileChangeGenerateObj = {
+  name: string;
+  data: ILPMPackagesJSON_Package;
+};
+/**
+ * Returns packages that should be installed/uninstall based on the new lock file.
+ * /REMOVE: If no publish sig was found then it will not include as must install / must uninstall since it will be considered fresh.
+ */
+export async function GenerateLockFileAtCwd(cwd?: string): Promise<{
+  RequiresInstall: RequireFileChangeGenerateObj[];
+  RequiresUninstall: RequireFileChangeGenerateObj[];
+}> {
+  const RequiresInstall: RequireFileChangeGenerateObj[] = [];
+  const RequiresUninstall: RequireFileChangeGenerateObj[] = [];
   cwd = cwd || process.cwd();
   await AddLockFileToCwd(cwd);
   try {
-    /*
     const PreviousLockfileData: LOCKFILE = JSON.parse(
       fs.readFileSync(path.join(cwd, "lpm.lock")).toString()
     );
-    */
+
     const CWDPackageJSON = await ReadPackageJSON(cwd);
     const LPMPackagesJSON = await ReadLPMPackagesJSON();
     const LOCK: LOCKFILE = {
@@ -366,13 +390,26 @@ export async function GenerateLockFileAtCwd(cwd?: string) {
     };
     // const bindir = path.join(cwd, "node_modules", ".bin");
     for (const Package in LPMPackagesJSON.packages) {
-      // const PreviousInLock =(PreviousLockfileData.pkgs && PreviousLockfileData.pkgs[Package]) || {};
+      const PreviousInLock =
+        (PreviousLockfileData.pkgs && PreviousLockfileData.pkgs[Package]) || {};
       const PackageData = LPMPackagesJSON.packages[Package];
       PackageData.installations.forEach(async (installation) => {
         if (installation === cwd) {
           if (!LOCK.pkgs[Package]) {
+            //a new publish was made but installed version has old/uknown signature. so request update
+            if (
+              // PreviousInLock.publish_sig !== undefined &&
+              PackageData.publish_sig !== PreviousInLock.publish_sig
+            ) {
+              RequiresInstall.push({
+                name: Package,
+                data: PackageData,
+              });
+            }
+
             LOCK.pkgs[Package] = {
               resolve: PackageData.resolve,
+              publish_sig: PackageData.publish_sig,
               // pm: PreviousInLock.pm || undefined,
             };
 
@@ -469,4 +506,8 @@ export async function GenerateLockFileAtCwd(cwd?: string) {
   } catch (e) {
     logreport.error("Failed to generate lock file " + e);
   }
+  return {
+    RequiresInstall: RequiresInstall,
+    RequiresUninstall: RequiresUninstall,
+  };
 }

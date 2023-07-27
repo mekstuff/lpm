@@ -11,9 +11,11 @@ import {
 } from "../utils/lpmfiles.js";
 import { execSync } from "child_process";
 import { BackUpLPMPackagesJSON } from "./backup.js";
+import { getcommand } from "../lpm.js";
 
 interface PublishOptions {
   scripts?: boolean;
+  push?: boolean;
 }
 
 export default class publish extends pack {
@@ -87,12 +89,17 @@ export default class publish extends pack {
     }
 
     logreport.endelapse("PUBLISH");
+
+    if (Options.push) {
+      await getcommand("push").Push(packagePath, {});
+    }
   }
   build(program: typeof CommanderProgram) {
     program
       .command("publish [packagePath]")
       .description("Packages and publishes your package to the local registry.")
       .option("--no-scripts [boolean]", "Does not run any scripts")
+      .option("--push [boolean]", "Runs push after successfully publishing")
       .action(async (packagePath, Options) => {
         this.Publish(packagePath, Options);
       });

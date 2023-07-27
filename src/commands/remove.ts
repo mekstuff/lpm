@@ -13,6 +13,7 @@ import { exec } from "child_process";
 interface RemoveOptions {
   packageManager?: SUPPORTED_PACKAGE_MANAGERS;
   skipLockCheck?: boolean;
+  skipRegistryCheck?: boolean;
   showPmLogs?: boolean;
 }
 
@@ -61,7 +62,13 @@ export default class remove {
       `Removing from global installations...`,
       "REMOVE_PKGS"
     );
-    await RemoveInstallationsToGlobalPackage(Packages, [process.cwd()]);
+    try {
+      await RemoveInstallationsToGlobalPackage(Packages, [process.cwd()]);
+    } catch (e) {
+      if (!Options.skipRegistryCheck) {
+        logreport.error(e);
+      }
+    }
     logreport.logwithelapse(
       `Finished removing from global installations`,
       "REMOVE_PKGS"
@@ -122,10 +129,14 @@ export default class remove {
       .description(
         "Remove a package to your project. Any Unknown Options will be sent to the package manager."
       )
-      .option("-pm, --package-manager [string]", "The package manager to use.")
+      .option("-pm, --package-manager <string>", "The package manager to use.")
       .option(
-        "--skip-lock-check [string]",
+        "--skip-lock-check [boolean]",
         "Skips checking for package within the lock file."
+      )
+      .option(
+        "--skip-registry-check [boolean]",
+        "Skips checking for package within the local registry. This may be useful for uninstalling unpublished packages."
       )
       .option(
         "-log, --show-pm-logs [boolean]",

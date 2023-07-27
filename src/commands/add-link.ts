@@ -15,7 +15,7 @@ export interface AddOptions {
   showPmLogs?: boolean;
 }
 
-export function GetPreferredPackageManager(): AddOptions["packageManager"] {
+export function GetPreferredPackageManager(): SUPPORTED_PACKAGE_MANAGERS {
   return "yarn";
 }
 
@@ -47,9 +47,10 @@ export default class AddLink {
     // let execString = "";
     let InstallPkgsCommandStr = "";
     const GlobalPkgsIndex = await ReadLPMPackagesJSON();
-    Packages.forEach(async (pkg, index) => {
+    for (const index in Packages) {
+      const pkg = Packages[index];
       logreport.logwithelapse(
-        `Fetching package ${chalk.blue(pkg)} [${index + 1} / ${
+        `Fetching package ${chalk.blue(pkg)} [${Number(index) + 1} / ${
           Packages.length
         }]...`,
         "INSTALL_PKGS"
@@ -62,18 +63,18 @@ export default class AddLink {
       }
       logreport.assert(
         typeof InGlobalIndex.resolve === "string",
-        `"${pkg}" Package does not have a valid resolve field in global index!. ${await GetLPMPackagesJSON()}`
+        `"${pkg}" Package does not have a valid resolve field in global index! ${await GetLPMPackagesJSON()}`
       );
       logreport.assert(
         typeof InGlobalIndex.installations === "object",
-        `"${pkg}" Package does not have a valid installations field in global index!. ${await GetLPMPackagesJSON()}`
+        `"${pkg}" Package does not have a valid installations field in global index! ${await GetLPMPackagesJSON()}`
       );
       let str = InGlobalIndex.resolve;
       if (Options.packageManager !== "npm") {
         str = "link:" + str;
       }
       InstallPkgsCommandStr += str + " ";
-    });
+    }
 
     await AddInstallationsToGlobalPackage(Packages, [process.cwd()]);
     logreport.logwithelapse(
