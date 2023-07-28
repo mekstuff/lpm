@@ -8,7 +8,11 @@ import { getcommand } from "../lpm.js";
 export default class push {
   async Push(
     cwd: string | undefined,
-    options: { Log?: boolean; scripts?: boolean; sync?: boolean },
+    options: {
+      Log?: boolean;
+      scripts?: boolean;
+      force?: boolean;
+    },
     CaptureNotPublished?: boolean
   ) {
     if (typeof cwd !== "string") {
@@ -37,7 +41,7 @@ export default class push {
     const NEW_PUBLISH_SIG = await getcommand("publish").Publish(cwd, {
       scripts: options.scripts,
     });
-    if (OLD_PUBLISH_SIG === NEW_PUBLISH_SIG) {
+    if (OLD_PUBLISH_SIG === NEW_PUBLISH_SIG && !options.force) {
       logreport("Nothing changed.", "log", true);
       process.exit();
     }
@@ -84,6 +88,10 @@ export default class push {
       .command("push [cwd]")
       .option("-log [boolean]", "Log command process.", false)
       .option("--no-scripts [boolean]", "Does not run any scripts")
+      .option(
+        "-f, --force [boolean]",
+        "Forces the publish even if nothing was changed."
+      )
       .description(
         "Publishes the package then updates all other packages that has it installed."
       )

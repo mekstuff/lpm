@@ -12,8 +12,10 @@ export default class push {
       logreport.error(`${targetPackage} was not found in LOCK file.`);
       process.exit(1);
     }
+    const d = process.cwd();
     process.chdir(options.Cwd); //change to working directory when running add since it does not support cwd option.
     await getcommand("add").Add([targetPackage], { showPmLogs: options.Log });
+    process.chdir(d);
   }
   build(program: typeof CommanderProgram) {
     program

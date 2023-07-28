@@ -11,7 +11,6 @@ import {
 } from "../utils/lpmfiles.js";
 import { execSync } from "child_process";
 import { BackUpLPMPackagesJSON } from "./backup.js";
-import { getcommand } from "../lpm.js";
 
 interface PublishOptions {
   scripts?: boolean;

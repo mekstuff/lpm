@@ -47,7 +47,6 @@ export function endelapse(
 ) {
   const mp = chalk.blue(timeElapseId + ": ");
   if (logwithelapse_ids.get(timeElapseId)) {
-    /*
     logreport(
       `${mp}${message || ""}✅ => ${chalk.green(
         new Date().toLocaleTimeString()
@@ -55,7 +54,7 @@ export function endelapse(
       logType,
       prefix
     );
-    */
+
     logwithelapse_ids.delete(timeElapseId);
   }
 }
@@ -77,30 +76,26 @@ export function logwithelapse(
   if (exists) {
     const date = new Date();
     const t = Math.floor(date.getTime() - exists.getTime());
-    /*
+
     logreport(
       `${mp + logMessage} => ${chalk.green(t + "ms")}`,
       logType,
       prefix
     );
-    */
+
     if (closeTimeElapse) {
-      /*
       logreport(
         `${mp}✅ => ${chalk.green(date.toLocaleTimeString())}`,
         logType,
         prefix
       );
-      */
     }
   } else {
-    /*
     logreport(
       `${mp + logMessage} =>  ${chalk.green(new Date().toLocaleTimeString())}`,
       logType,
       prefix
     );
-    */
   }
   if (!closeTimeElapse) {
     logwithelapse_ids.set(timeElapseId, new Date());
