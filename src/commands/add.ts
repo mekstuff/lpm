@@ -1,6 +1,8 @@
+import fs from "fs";
 import LogTree, { Tree } from "console-log-tree";
 import chalk from "chalk";
 import logreport from "../utils/logreport.js";
+import pluralize from "pluralize";
 import { program as CommanderProgram } from "commander";
 import { SUPPORTED_PACKAGE_MANAGERS } from "../utils/CONSTANTS.js";
 import { GetPreferredPackageManager } from "./add-link.js";
@@ -14,7 +16,7 @@ import {
 } from "../utils/lpmfiles.js";
 import path from "path";
 import { execSync } from "child_process";
-import { ReadPackageJSON, WritePackageJSON } from "../utils/PackageReader.js";
+import { ParsePackageName, ReadPackageJSON } from "../utils/PackageReader.js";
 
 export interface AddOptions {
   packageManager?: SUPPORTED_PACKAGE_MANAGERS;
@@ -25,13 +27,52 @@ export async function AddFilesFromLockData(
   PackageManager: SUPPORTED_PACKAGE_MANAGERS,
   log: boolean | undefined,
   cwd: string | undefined,
-  ToInstall: RequireFileChangeGenerateObj[]
+  ToInstall: RequireFileChangeGenerateObj[],
+  ToInject: RequireFileChangeGenerateObj[]
 ) {
   cwd = cwd || process.cwd();
   const LOCKFILE = await ReadLockFileFromCwd(cwd);
   const TargetPkgs: (typeof LOCKFILE)["pkgs"] = {};
+  if (ToInject.length > 0) {
+    logreport(
+      `Injecting ${ToInject.length} ${pluralize(
+        "dependency",
+        ToInject.length
+      )}.`,
+      "log",
+      true
+    );
+    for (const val of ToInject) {
+      const p = path.join(cwd, "node_modules", val.name);
+      try {
+        if (fs.existsSync(p)) {
+          fs.rmSync(p, { recursive: true });
+        }
+        const { OrginizationName, PackageName } = await ParsePackageName(
+          val.name
+        );
+        if (OrginizationName !== "") {
+          fs.mkdirSync(path.join(cwd, "node_modules", OrginizationName));
+        }
+        fs.cpSync(
+          val.data.resolve,
+          path.join(cwd, "node_modules", OrginizationName, PackageName),
+          { recursive: true }
+        );
+      } catch (e) {
+        logreport.error(`Failed to inject package ${val.name} => ${e}`);
+      }
+    }
+  }
   if (ToInstall.length > 0) {
-    logreport(`Updating ${ToInstall.length} dependencies.`, "log", true);
+    logreport(
+      `Updating ${ToInstall.length} ${pluralize(
+        "dependency",
+        ToInstall.length
+      )}.`,
+      "log",
+      true
+    );
     for (const val of ToInstall) {
       TargetPkgs[val.name] = {
         resolve: val.data.resolve,
@@ -159,10 +200,6 @@ export async function AddFilesFromLockData(
     forEachDep(NORMAL_DEPS);
     forEachDep(DEV_DEPS, "--dev");
     console.log(LogTree.parse(tree));
-    // console.log(PackageJSON);
-    // await WritePackageJSON(cwd, JSON.stringify(PackageJSON.result, null, 2));
-    // const cmd = `${PackageManager} install`;
-    // execSync(cmd, { cwd: cwd, stdio: log ? "inherit" : "ignore" });
   } catch (err) {
     logreport.error(
       `Failed to install packages with ${chalk.blue(
@@ -222,12 +259,14 @@ export default class add {
       });
     }
     await AddInstallationsToGlobalPackage(Packages, [process.cwd()]);
-    const { RequiresInstall } = await GenerateLockFileAtCwd();
+    const { RequiresInstall, RequiresNode_Modules_Injection } =
+      await GenerateLockFileAtCwd();
     await AddFilesFromLockData(
       Options.packageManager,
       Options.showPmLogs,
       undefined,
-      RequiresInstall
+      RequiresInstall,
+      RequiresNode_Modules_Injection
     );
     // await AddFilesFromLockData();
   }

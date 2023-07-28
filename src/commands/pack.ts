@@ -164,6 +164,7 @@ export default class pack {
       logreport.error("Could not get files to pack " + err);
     });
     let HASH = "";
+    let PACKAGE_HASH: string | undefined;
     if (MapPack) {
       const Pack: string[] = [];
       for (const v of MapPack) {
@@ -172,7 +173,11 @@ export default class pack {
         // console.log(Promise.all(await getFileHash(res, v[1])));
       }
       for (const p of Pack.sort()) {
-        HASH += await HashFile(p);
+        const h = await HashFile(p);
+        if (p === "package.json") {
+          PACKAGE_HASH = h;
+        }
+        HASH += h;
       }
 
       try {
@@ -191,7 +196,15 @@ export default class pack {
       logreport.error("Did not get files to pack.");
     }
     // const outpath = path.resolve(path.join(packagePath, Options.out));
-    const pack_signature = crypto.createHash("md5").update(HASH).digest("hex");
+    if (!PACKAGE_HASH) {
+      logreport.error("Could not retrieve package hash.");
+      process.exit(1);
+    }
+
+    const pack_signature =
+      crypto.createHash("md5").update(HASH).digest("hex") +
+      "-" +
+      crypto.createHash("md5").update(PACKAGE_HASH).digest("hex"); //we has the package.json and append to the pack_signature so we can detect changes in package.json
     const outpath = path.resolve(Options.out);
     logreport.logwithelapse(`Packaged => "${outpath}"`, "PACK", true);
     return { outpath, pack_signature };

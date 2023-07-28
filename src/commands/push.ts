@@ -4,6 +4,7 @@ import logreport from "../utils/logreport.js";
 import { ReadLPMPackagesJSON } from "../utils/lpmfiles.js";
 import chalk from "chalk";
 import { getcommand } from "../lpm.js";
+import pluralize from "pluralize";
 
 export default class push {
   async Push(
@@ -48,7 +49,7 @@ export default class push {
     logreport.logwithelapse(
       `${chalk.green(name)} is installed in ${chalk.green(
         pkg.installations.length
-      )} directories....`,
+      )} ${pluralize("directory", pkg.installations.length)}...`,
       "PUSH"
     );
 
@@ -78,7 +79,7 @@ export default class push {
     logreport.logwithelapse(
       `${chalk.green(
         `[${Total_Updated}/${pkg.installations.length}]`
-      )} packages successfully updated.`,
+      )} ${pluralize("package", Total_Updated)} successfully updated.`,
       "PUSH",
       true
     );

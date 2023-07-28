@@ -13,6 +13,17 @@ interface PackageFileRequired {
 
 export type PackageFile = Partial<PackageFileRequired>;
 
+export async function ParsePackageName(Name: string): Promise<{
+  PackageName: string;
+  OrginizationName: string;
+}> {
+  const s = Name.split("/");
+  return {
+    OrginizationName: s[1] ? s[0] : "",
+    PackageName: s[1] ? s[1] : s[0],
+  };
+}
+
 export async function ReadPackageJSON(
   PackagePath: string,
   JsonFileName?: string,

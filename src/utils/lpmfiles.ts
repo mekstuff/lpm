@@ -5,7 +5,6 @@ import crypto from "crypto";
 import logreport from "./logreport.js";
 import { BackUpLPMPackagesJSON } from "../commands/backup.js";
 import { PackageFile, ReadPackageJSON } from "./PackageReader.js";
-import chalk from "chalk";
 
 const LPM_DIR = path.join(os.homedir(), ".local-package-manager");
 
@@ -368,9 +367,11 @@ export type RequireFileChangeGenerateObj = {
 export async function GenerateLockFileAtCwd(cwd?: string): Promise<{
   RequiresInstall: RequireFileChangeGenerateObj[];
   RequiresUninstall: RequireFileChangeGenerateObj[];
+  RequiresNode_Modules_Injection: RequireFileChangeGenerateObj[];
 }> {
   const RequiresInstall: RequireFileChangeGenerateObj[] = [];
   const RequiresUninstall: RequireFileChangeGenerateObj[] = [];
+  const RequiresNode_Modules_Injection: RequireFileChangeGenerateObj[] = [];
   cwd = cwd || process.cwd();
   await AddLockFileToCwd(cwd);
   try {
@@ -396,10 +397,23 @@ export async function GenerateLockFileAtCwd(cwd?: string): Promise<{
               // PreviousInLock.publish_sig !== undefined &&
               PackageData.publish_sig !== PreviousInLock.publish_sig
             ) {
-              RequiresInstall.push({
+              const f = {
                 name: Package,
                 data: PackageData,
-              });
+              };
+              if (PreviousInLock.publish_sig !== undefined) {
+                const lockpsigsplit = PreviousInLock.publish_sig.split("-");
+                const pubsigsplit = PackageData.publish_sig.split("-");
+                const IS_SAME_PACKAGE_JSON =
+                  lockpsigsplit[1] === pubsigsplit[1];
+                if (IS_SAME_PACKAGE_JSON) {
+                  RequiresNode_Modules_Injection.push(f); //If the package.json remains the same, just inject the module into node_modules instead of updating with package manager.
+                } else {
+                  RequiresInstall.push(f);
+                }
+              } else {
+                RequiresInstall.push(f);
+              }
             }
 
             LOCK.pkgs[Package] = {
@@ -504,5 +518,6 @@ export async function GenerateLockFileAtCwd(cwd?: string): Promise<{
   return {
     RequiresInstall: RequiresInstall,
     RequiresUninstall: RequiresUninstall,
+    RequiresNode_Modules_Injection: RequiresNode_Modules_Injection,
   };
 }
