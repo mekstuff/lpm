@@ -74,7 +74,7 @@ export default class unpublish extends pack {
   build(program: typeof CommanderProgram) {
     program
       .command("unpublish [packagePath]")
-      .description("Unpublishes your package to the local registry.")
+      .description("Unpublishes your package from the local registry.")
       .action(async (packagePath) => {
         this.Unpublish(packagePath);
       });

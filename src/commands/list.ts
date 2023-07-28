@@ -7,11 +7,14 @@ import LogTree, { Tree } from "console-log-tree";
 import { ReadPackageJSON } from "../utils/PackageReader.js";
 
 interface ListOptions {
-  all: boolean;
+  all?: boolean;
+  depth?: number;
 }
 
 export default class list {
   async List(targetPackage: string | undefined, Options: ListOptions) {
+    Options.depth = Number(Options.depth);
+    // Options.depth = (Options.depth === undefined && 1) || Options.depth;
     if (!Options.all) {
       const PackageJSON = await ReadPackageJSON(process.cwd());
       if (
@@ -29,7 +32,8 @@ export default class list {
           continue;
         }
         subTreeChildren.push({
-          name: Package,
+          name:
+            Package + chalk.yellow(` | ${LockFile.pkgs[Package].publish_sig}`),
         });
       }
       tree.push({
@@ -49,30 +53,35 @@ export default class list {
         continue;
       }
       const children: Tree[] = [];
-      LPMPackagesJSON.packages[Package].installations.forEach(
-        (installation) => {
-          let name: string;
-          try {
-            name = JSON.parse(
-              fs
-                .readFileSync(path.join(installation, "package.json"))
-                .toString()
-            ).name;
-          } catch (e) {
-            name = installation + " | " + chalk.red("No package.json");
+      if (Options.depth !== 0) {
+        LPMPackagesJSON.packages[Package].installations.forEach(
+          (installation) => {
+            let name: string;
+            try {
+              name = JSON.parse(
+                fs
+                  .readFileSync(path.join(installation, "package.json"))
+                  .toString()
+              ).name;
+            } catch (e) {
+              name = installation + " | " + chalk.red("No package.json");
+            }
+            if (
+              fs.existsSync(path.join(process.cwd(), "node_modules", Package))
+            ) {
+              name += " | " + chalk.yellow("Not installed.");
+            }
+            children.push({
+              name: name,
+            });
           }
-          if (
-            fs.existsSync(path.join(process.cwd(), "node_modules", Package))
-          ) {
-            name += " | " + chalk.yellow("Not installed.");
-          }
-          children.push({
-            name: name,
-          });
-        }
-      );
+        );
+      }
+
       tree.push({
-        name: Package,
+        name:
+          Package +
+          chalk.yellow(` | ${LPMPackagesJSON.packages[Package].publish_sig}`),
         children: children,
       });
     }
@@ -83,8 +92,14 @@ export default class list {
       .command("list [packageName]")
       .description("List lpm packages")
       .option("-a, --all", "List all published packages")
-      .action((targetPackage, options) => {
-        this.List(targetPackage, options);
+      .option("-d, --depth <number>", "List all published packages", "0")
+      .action(async (targetPackage, options) => {
+        await this.List(targetPackage, options);
+      })
+      .command("all [packageName]")
+      .option("-d, --depth <number>", "List all published packages", "0")
+      .action(async (targetPackage, options) => {
+        await this.List(targetPackage, { ...options, all: true });
       });
   }
 }

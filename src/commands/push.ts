@@ -6,7 +6,11 @@ import chalk from "chalk";
 import { getcommand } from "../lpm.js";
 
 export default class push {
-  async Push(cwd: string | undefined, options: { Log?: boolean }) {
+  async Push(
+    cwd: string | undefined,
+    options: { Log?: boolean; scripts?: boolean; sync?: boolean },
+    CaptureNotPublished?: boolean
+  ) {
     if (typeof cwd !== "string") {
       cwd = process.cwd();
     }
@@ -23,8 +27,19 @@ export default class push {
     const LPMPackagesJSON = await ReadLPMPackagesJSON();
     const pkg = LPMPackagesJSON.packages[name];
     if (!pkg) {
+      if (CaptureNotPublished) {
+        return;
+      }
       logreport.error(`${name} is not published.`);
       process.exit(1);
+    }
+    const OLD_PUBLISH_SIG = pkg.publish_sig;
+    const NEW_PUBLISH_SIG = await getcommand("publish").Publish(cwd, {
+      scripts: options.scripts,
+    });
+    if (OLD_PUBLISH_SIG === NEW_PUBLISH_SIG) {
+      logreport("Nothing changed.", "log", true);
+      process.exit();
     }
     logreport.logwithelapse(
       `${chalk.green(name)} is installed in ${chalk.green(
@@ -32,6 +47,7 @@ export default class push {
       )} directories....`,
       "PUSH"
     );
+
     let Total_Updated = 0;
     let Total_Ran = 0;
     await new Promise<void>(async (resolve) => {
@@ -41,6 +57,7 @@ export default class push {
             Cwd: installation,
             Log: options.Log,
           });
+          await this.Push(installation, options, true);
           Total_Updated++;
         } catch (e) {
           logreport.warn(
@@ -66,8 +83,9 @@ export default class push {
     program
       .command("push [cwd]")
       .option("-log [boolean]", "Log command process.", false)
+      .option("--no-scripts [boolean]", "Does not run any scripts")
       .description(
-        "Pushes the currently published package to all installations."
+        "Publishes the package then updates all other packages that has it installed."
       )
       .action(async (cwd, options) => {
         await this.Push(cwd, options);

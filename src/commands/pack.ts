@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import tar from "tar";
+import crypto from "crypto";
 import logreport from "../utils/logreport.js";
 import { program as CommanderProgram } from "commander";
 import { ReadPackageJSON } from "../utils/PackageReader.js";
@@ -11,6 +12,39 @@ interface PackOptions {
   scripts?: boolean;
 }
 
+async function HashFile(filePath: string) {
+  return new Promise<string>(async (resolve) => {
+    if (fs.statSync(filePath).isDirectory()) {
+      const d = fs.readdirSync(filePath);
+      let f = "";
+      for (const x of d) {
+        f += await HashFile(path.join(filePath, x));
+      }
+      return resolve(f);
+    }
+    const fd = fs.createReadStream(filePath);
+    const hash = crypto.createHash("sha1");
+    hash.setEncoding("hex");
+
+    fd.on("end", function () {
+      hash.end();
+      resolve(hash.read()); // the desired sha1sum
+      // resolve();
+    });
+
+    // read all file and pipe it (write it) to the hash object
+    fd.pipe(hash);
+    /*
+    const md5sum = crypto.createHash("md5");
+    md5sum.update(relPath.replace(/\\/g, "/"));
+    stream.on("data", (data: string) => md5sum.update(data));
+    stream.on("error", reject).on("close", () => {
+      resolve(md5sum.digest("hex"));
+    });
+    */
+  });
+}
+
 async function GetPackageFiles(PackagePath: string, packageJson: object) {
   logreport.assert(PackagePath !== undefined, "Package Path Not Passed.");
   logreport.assert(packageJson !== undefined, "Package JSON Not Passed.");
@@ -19,7 +53,13 @@ async function GetPackageFiles(PackagePath: string, packageJson: object) {
    * We must include `lpm.lock` for when we do lpm run-release it will make sure all packages are set to versions instead of link paths.
    */
   const MUST_INCLUDE = ["package.json"];
-  let MUST_EXCLUDE = [".gitignore", "node_modules", "yarn-error.log"];
+  let MUST_EXCLUDE = [
+    ".gitignore",
+    "node_modules",
+    "yarn-error.log",
+    "yarn.lock",
+    "package-lock.json",
+  ];
 
   /**
    * We must include `lpm.lock` for when we do lpm run-release it will make sure all packages are set to versions instead of link paths.
@@ -90,7 +130,7 @@ export default class pack {
   async Pack(
     packagePath: string | undefined,
     Options: PackOptions
-  ): Promise<string | undefined> {
+  ): Promise<{ outpath: string; pack_signature: string } | undefined> {
     if (packagePath === undefined) {
       packagePath = ".";
     }
@@ -123,11 +163,18 @@ export default class pack {
     const MapPack = await GetPackageFiles(packagePath, result).catch((err) => {
       logreport.error("Could not get files to pack " + err);
     });
+    let HASH = "";
     if (MapPack) {
       const Pack: string[] = [];
-      MapPack.forEach((v) => {
-        Pack.push(path.relative(packagePath as string, v));
-      });
+      for (const v of MapPack) {
+        const res = path.relative(packagePath as string, v[1]);
+        Pack.push(res);
+        // console.log(Promise.all(await getFileHash(res, v[1])));
+      }
+      for (const p of Pack.sort()) {
+        HASH += await HashFile(p);
+      }
+
       try {
         tar.c(
           {
@@ -144,9 +191,10 @@ export default class pack {
       logreport.error("Did not get files to pack.");
     }
     // const outpath = path.resolve(path.join(packagePath, Options.out));
+    const pack_signature = crypto.createHash("md5").update(HASH).digest("hex");
     const outpath = path.resolve(Options.out);
     logreport.logwithelapse(`Packaged => "${outpath}"`, "PACK", true);
-    return outpath;
+    return { outpath, pack_signature };
   }
   build(program: typeof CommanderProgram) {
     program

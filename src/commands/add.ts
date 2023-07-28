@@ -100,7 +100,7 @@ export async function AddFilesFromLockData(
       });
       const str = `file:${path.relative(cwd, InstallationPath)}`;
       */
-      const str = `file:${path.relative(cwd, pkg.resolve)}`;
+      const str = `file:${pkg.resolve}`;
       const data = {
         name: pkgName,
         install: str,

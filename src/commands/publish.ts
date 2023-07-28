@@ -15,11 +15,14 @@ import { getcommand } from "../lpm.js";
 
 interface PublishOptions {
   scripts?: boolean;
-  push?: boolean;
+  // push?: boolean;
 }
 
 export default class publish extends pack {
-  async Publish(packagePath: string | undefined, Options: PublishOptions) {
+  async Publish(
+    packagePath: string | undefined,
+    Options: PublishOptions
+  ): Promise<string | void> {
     await BackUpLPMPackagesJSON();
     packagePath = packagePath || ".";
     const { success, result } = await ReadPackageJSON(packagePath);
@@ -56,17 +59,7 @@ export default class publish extends pack {
     }
     const packageinlpmdir = await CreateLPMPackageDirectory(result.name);
 
-    await AddPackagesToLPMJSON([
-      { name: result.name, resolve: path.join(packageinlpmdir, "pkg") },
-    ]).then((added) => {
-      if (!added) {
-        logreport(
-          `Could not add package to global json file! ${result.name} => ${packageinlpmdir}`
-        );
-      }
-    });
-
-    const tarbaldir = await this.Pack(packagePath, {
+    const packRes = await this.Pack(packagePath, {
       out: path.join(
         await GetLPMPackagesDirectory(),
         result.name,
@@ -77,9 +70,29 @@ export default class publish extends pack {
       console.error(err);
       logreport.error("Failed to pack. " + err);
     });
+
+    if (!packRes) {
+      logreport.error("Failed to pack.");
+      process.exit(1);
+    }
+
+    await AddPackagesToLPMJSON([
+      {
+        name: result.name,
+        resolve: path.join(packageinlpmdir, "pkg"),
+        publish_signature: packRes.pack_signature,
+      },
+    ]).then((added) => {
+      if (!added) {
+        logreport(
+          `Could not add package to global json file! ${result.name} => ${packageinlpmdir}`
+        );
+      }
+    });
+
     try {
       tar.x({
-        file: tarbaldir as string,
+        file: packRes.outpath as string,
         cwd: path.join(packageinlpmdir, "pkg"),
         sync: true,
       });
@@ -90,16 +103,20 @@ export default class publish extends pack {
 
     logreport.endelapse("PUBLISH");
 
+    return packRes.pack_signature;
+
+    /*
     if (Options.push) {
       await getcommand("push").Push(packagePath, {});
     }
+    */
   }
   build(program: typeof CommanderProgram) {
     program
       .command("publish [packagePath]")
       .description("Packages and publishes your package to the local registry.")
       .option("--no-scripts [boolean]", "Does not run any scripts")
-      .option("--push [boolean]", "Runs push after successfully publishing")
+      // .option("--push [boolean]", "Runs push after successfully publishing")
       .action(async (packagePath, Options) => {
         this.Publish(packagePath, Options);
       });

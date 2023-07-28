@@ -181,12 +181,8 @@ interface ILPMPackagesJSON {
   packages: { [key: string]: ILPMPackagesJSON_Package };
 }
 
-function GeneratePublishSignatureCode(): string {
-  return crypto.randomBytes(3).toString("hex") + ".pbshsig";
-}
-
 export async function AddPackagesToLPMJSON(
-  Packages: { name: string; resolve: string }[]
+  Packages: { name: string; resolve: string; publish_signature: string }[]
 ): Promise<boolean> {
   logreport.assert(typeof Packages === "object", "Invalid Packages passed.");
   try {
@@ -196,9 +192,8 @@ export async function AddPackagesToLPMJSON(
       const NewData: ILPMPackagesJSON_Package = {
         resolve: pkg.resolve,
         installations: (ExistingPkgData && ExistingPkgData.installations) || [],
-        publish_sig: GeneratePublishSignatureCode(),
+        publish_sig: pkg.publish_signature,
       };
-
       LPMPackagesJSON.packages[pkg.name] = NewData;
     });
     const wrote = WriteLPMPackagesJSON(LPMPackagesJSON);
