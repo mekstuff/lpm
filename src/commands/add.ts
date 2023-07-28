@@ -43,16 +43,13 @@ export async function AddFilesFromLockData(
       true
     );
     for (const val of ToInject) {
+      const { OrginizationName, PackageName } = await ParsePackageName(
+        val.name
+      );
       const p = path.join(cwd, "node_modules", val.name);
       try {
         if (fs.existsSync(p)) {
-          fs.rmSync(p, { recursive: true });
-        }
-        const { OrginizationName, PackageName } = await ParsePackageName(
-          val.name
-        );
-        if (OrginizationName !== "") {
-          fs.mkdirSync(path.join(cwd, "node_modules", OrginizationName));
+          fs.rmSync(p, { recursive: true, force: true });
         }
         fs.cpSync(
           val.data.resolve,
