@@ -23,7 +23,7 @@ export default class unpublish extends pack {
     if (!result.name) {
       return logreport.error("Package must have a name to unpublish.");
     }
-    logreport.logwithelapse(
+    logreport.Elapse(
       `Unpublishing ${result?.name} ${result?.version}`,
       "UNPUBLISH"
     );
@@ -48,11 +48,11 @@ export default class unpublish extends pack {
       logreport.error("Failed to publish " + err);
     }
 
-    logreport.endelapse("UNPUBLISH");
+    logreport.EndElapse("UNPUBLISH");
   }
 
   async UnRegister(packages: string[]) {
-    logreport.logwithelapse("Unregistering packages...", "UNREGISTER");
+    logreport.Elapse("Unregistering packages...", "UNREGISTER");
     const RegisteredPackages = await ReadLPMPackagesJSON();
     packages.forEach(async (Package) => {
       if (!RegisteredPackages.packages[Package]) {
@@ -62,14 +62,14 @@ export default class unpublish extends pack {
       }
     });
     //remove from JSON
-    logreport.logwithelapse("Removing from global packages...", "UNREGISTER");
+    logreport.Elapse("Removing from global packages...", "UNREGISTER");
     await RemovePackagesFromLPMJSON(packages);
     //remove tarbals
-    logreport.logwithelapse("Removing files...", "UNREGISTER");
+    logreport.Elapse("Removing files...", "UNREGISTER");
     packages.forEach(async (pkg) => {
       await RemoveLPMPackageDirectory(pkg);
     });
-    logreport.logwithelapse("Unregistered packages", "UNREGISTER", true);
+    logreport.Elapse("Unregistered packages", "UNREGISTER", true);
   }
   build(program: typeof CommanderProgram) {
     program

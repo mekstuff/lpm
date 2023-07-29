@@ -38,7 +38,7 @@ export default class AddLink {
         PackageManagerFlags.push(arg);
       }
     });
-    logreport.logwithelapse(
+    logreport.Elapse(
       `Installing ${Packages.length} package${
         Packages.length === 1 ? "" : "s"
       }.`,
@@ -49,7 +49,7 @@ export default class AddLink {
     const GlobalPkgsIndex = await ReadLPMPackagesJSON();
     for (const index in Packages) {
       const pkg = Packages[index];
-      logreport.logwithelapse(
+      logreport.Elapse(
         `Fetching package ${chalk.blue(pkg)} [${Number(index) + 1} / ${
           Packages.length
         }]...`,
@@ -77,11 +77,8 @@ export default class AddLink {
     }
 
     await AddInstallationsToGlobalPackage(Packages, [process.cwd()]);
-    logreport.logwithelapse(
-      `Finished Adding to global installations`,
-      "INSTALL_PKGS"
-    );
-    logreport.logwithelapse(
+    logreport.Elapse(`Finished Adding to global installations`, "INSTALL_PKGS");
+    logreport.Elapse(
       `Installing with package manager ${chalk.blue(
         Options.packageManager
       )}...`,
@@ -128,14 +125,14 @@ export default class AddLink {
 
     logreport(`Exit Code "${executed}"`, "VERBOSE");
 
-    logreport.logwithelapse(
+    logreport.Elapse(
       `Installed with package manager with exit code ${executed}`,
       "INSTALL_PKGS"
     );
 
-    logreport.logwithelapse(`Generating LOCK file...`, "INSTALL_PKGS");
+    logreport.Elapse(`Generating LOCK file...`, "INSTALL_PKGS");
     await GenerateLockFileAtCwd();
-    logreport.logwithelapse(`LOCK file Generated`, "INSTALL_PKGS", true);
+    logreport.Elapse(`LOCK file Generated`, "INSTALL_PKGS", true);
   }
   build(program: typeof CommanderProgram) {
     program

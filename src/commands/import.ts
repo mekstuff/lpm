@@ -8,7 +8,7 @@ const { prompt } = enqpkg;
 
 export default class IMPORT {
   async import(Packages: string[]) {
-    logreport.logwithelapse(`Importing ${Packages.length} packages`, "IMPORT");
+    logreport.Elapse(`Importing ${Packages.length} packages`, "IMPORT");
     const LPMPackages = await ReadLPMPackagesJSON();
     const LinkDirs: { name: string; resolve: string }[] = [];
     Packages.forEach((pkg) => {

@@ -36,7 +36,7 @@ export default class publish extends pack {
     if (!result.name) {
       return logreport.error("Package must have a name to publish.");
     }
-    logreport.logwithelapse(
+    logreport.Elapse(
       `Publishing ${result?.name} ${result?.version}`,
       "PUBLISH"
     );
@@ -100,7 +100,7 @@ export default class publish extends pack {
       logreport.error("Failed to publish " + err);
     }
 
-    logreport.endelapse("PUBLISH");
+    logreport.EndElapse("PUBLISH");
 
     return packRes.pack_signature;
 

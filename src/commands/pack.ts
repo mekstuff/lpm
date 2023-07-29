@@ -134,7 +134,7 @@ export default class pack {
     if (packagePath === undefined) {
       packagePath = ".";
     }
-    // logreport.logwithelapse(`Fetching Information "${packagePath}"...`, "PACK");
+    // logreport.Elapse(`Fetching Information "${packagePath}"...`, "PACK");
     const { success, result } = await ReadPackageJSON(packagePath);
     if (!success) {
       logreport.error(result);
@@ -159,7 +159,7 @@ export default class pack {
       }
     }
     Options.out = Options.out || `${result.name}-v${result.version}.tgz`;
-    logreport.logwithelapse(`Packaging "${result.name}"...`, "PACK");
+    logreport.Elapse(`Packaging "${result.name}"...`, "PACK");
     const MapPack = await GetPackageFiles(packagePath, result).catch((err) => {
       logreport.error("Could not get files to pack " + err);
     });
@@ -202,7 +202,7 @@ export default class pack {
       "-" +
       crypto.createHash("md5").update(PACKAGE_HASH).digest("hex"); //we has the package.json and append to the pack_signature so we can detect changes in package.json
     const outpath = path.resolve(Options.out);
-    logreport.logwithelapse(`Packaged => "${outpath}"`, "PACK", true);
+    logreport.Elapse(`Packaged => "${outpath}"`, "PACK", true);
     return { outpath, pack_signature };
   }
   build(program: typeof CommanderProgram) {

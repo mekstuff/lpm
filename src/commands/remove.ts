@@ -37,12 +37,12 @@ export default class remove {
         PackageManagerFlags.push(arg);
       }
     });
-    logreport.logwithelapse(
+    logreport.Elapse(
       `Removing ${Packages.length} package${Packages.length === 1 ? "" : "s"}.`,
       "REMOVE_PKGS"
     );
     Packages.forEach(async (pkg, index) => {
-      logreport.logwithelapse(
+      logreport.Elapse(
         `Fetching package ${chalk.blue(pkg)} [${index + 1} / ${
           Packages.length
         }]...`,
@@ -58,10 +58,7 @@ export default class remove {
       }
     });
 
-    logreport.logwithelapse(
-      `Removing from global installations...`,
-      "REMOVE_PKGS"
-    );
+    logreport.Elapse(`Removing from global installations...`, "REMOVE_PKGS");
     try {
       await RemoveInstallationsToGlobalPackage(Packages, [process.cwd()]);
     } catch (e) {
@@ -69,12 +66,12 @@ export default class remove {
         logreport.error(e);
       }
     }
-    logreport.logwithelapse(
+    logreport.Elapse(
       `Finished removing from global installations`,
       "REMOVE_PKGS"
     );
 
-    logreport.logwithelapse(
+    logreport.Elapse(
       `Removing from package manager ${chalk.blue(Options.packageManager)}...`,
       "REMOVE_PKGS"
     );
@@ -113,14 +110,14 @@ export default class remove {
       });
     });
     logreport(`Exit Code "${await p}"`, "VERBOSE");
-    logreport.logwithelapse(
+    logreport.Elapse(
       `Removed from package manager with exit code ${await p}`,
       "REMOVE_PKGS"
     );
 
-    logreport.logwithelapse(`Generating LOCK file...`, "REMOVE_PKGS");
+    logreport.Elapse(`Generating LOCK file...`, "REMOVE_PKGS");
     await GenerateLockFileAtCwd();
-    logreport.logwithelapse(`LOCK file Generated`, "REMOVE_PKGS", true);
+    logreport.Elapse(`LOCK file Generated`, "REMOVE_PKGS", true);
   }
   build(program: typeof CommanderProgram) {
     program

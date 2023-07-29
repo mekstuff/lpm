@@ -26,11 +26,11 @@ export interface AddOptions {
 export async function AddFilesFromLockData(
   PackageManager: SUPPORTED_PACKAGE_MANAGERS,
   log: boolean | undefined,
-  cwd: string | undefined,
+  targetCwd: string | undefined,
   ToInstall: RequireFileChangeGenerateObj[],
   ToInject: RequireFileChangeGenerateObj[]
 ) {
-  cwd = cwd || process.cwd();
+  const cwd = targetCwd ? targetCwd : process.cwd();
   const LOCKFILE = await ReadLockFileFromCwd(cwd);
   const TargetPkgs: (typeof LOCKFILE)["pkgs"] = {};
   if (ToInject.length > 0) {
@@ -230,7 +230,7 @@ export default class add {
     const PKGS_RESOLVES: { name: string; resolve: string }[] = [];
     for (const index in Packages) {
       const pkg = Packages[index];
-      logreport.logwithelapse(
+      logreport.Elapse(
         `Fetching package ${chalk.blue(pkg)} [${Number(index) + 1} / ${
           Packages.length
         }]...`,

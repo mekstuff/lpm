@@ -1,0 +1,9 @@
+{
+  "pkgs": {
+    "@mekstuff/logreport": {
+      "resolve": "C:\\Users\\Lanzo\\.local-package-manager\\packages\\@mekstuff\\logreport\\pkg",
+      "publish_sig": "cb16775a013a7c5400d002aa5b638555-cb218e5a1e44bd2cab588dd08735222d",
+      "dependencyScope": "dependency"
+    }
+  }
+}

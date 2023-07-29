@@ -46,7 +46,7 @@ export default class push {
       logreport("Nothing changed.", "log", true);
       process.exit();
     }
-    logreport.logwithelapse(
+    logreport.Elapse(
       `${chalk.green(name)} is installed in ${chalk.green(
         pkg.installations.length
       )} ${pluralize("directory", pkg.installations.length)}...`,
@@ -76,7 +76,7 @@ export default class push {
       });
     });
 
-    logreport.logwithelapse(
+    logreport.Elapse(
       `${chalk.green(
         `[${Total_Updated}/${pkg.installations.length}]`
       )} ${pluralize("package", Total_Updated)} successfully updated.`,
