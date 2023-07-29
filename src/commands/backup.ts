@@ -32,6 +32,9 @@ export async function GetLPMInstallationsBackup() {
 }
 
 export async function BackUpLPMPackagesJSON(noLogs?: boolean) {
+  if (noLogs !== false) {
+    noLogs = true; //Backup info clouds console more. so unless explicitly set noLogs to false, disable logs.
+  }
   try {
     const JSON_STR = fs.readFileSync(await GetLPMPackagesJSON(), "utf8");
     const JSON_Package = await ReadLPMPackagesJSON();
@@ -90,7 +93,7 @@ export async function BackUpLPMPackagesJSON(noLogs?: boolean) {
 export default class backup {
   build(program: typeof CommanderProgram) {
     const backup_program = program.command("backup").action(async () => {
-      await BackUpLPMPackagesJSON();
+      await BackUpLPMPackagesJSON(false);
     });
 
     backup_program.command("revert").action(async () => {

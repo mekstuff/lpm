@@ -134,7 +134,7 @@ export default class pack {
     if (packagePath === undefined) {
       packagePath = ".";
     }
-    logreport.logwithelapse(`Fetching Information "${packagePath}"...`, "PACK");
+    // logreport.logwithelapse(`Fetching Information "${packagePath}"...`, "PACK");
     const { success, result } = await ReadPackageJSON(packagePath);
     if (!success) {
       logreport.error(result);
@@ -173,7 +173,7 @@ export default class pack {
         // console.log(Promise.all(await getFileHash(res, v[1])));
       }
       for (const p of Pack.sort()) {
-        const h = await HashFile(p);
+        const h = await HashFile(path.join(packagePath, p));
         if (p === "package.json") {
           PACKAGE_HASH = h;
         }
@@ -195,7 +195,6 @@ export default class pack {
     } else {
       logreport.error("Did not get files to pack.");
     }
-    // const outpath = path.resolve(path.join(packagePath, Options.out));
     if (!PACKAGE_HASH) {
       logreport.error("Could not retrieve package hash.");
       process.exit(1);
