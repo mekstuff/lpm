@@ -153,9 +153,9 @@ export default class pack {
           });
         }
       } else {
-        logreport.warn(
-          "scripts detected but `--no-scripts` flag was passed, not executing."
-        );
+        // logreport.warn(
+        //   "scripts detected but `--no-scripts` flag was passed, not executing."
+        // );
       }
     }
     Options.out = Options.out || `${result.name}-v${result.version}.tgz`;
@@ -168,9 +168,7 @@ export default class pack {
     if (MapPack) {
       const Pack: string[] = [];
       for (const v of MapPack) {
-        const res = path.relative(packagePath as string, v[1]);
-        Pack.push(res);
-        // console.log(Promise.all(await getFileHash(res, v[1])));
+        Pack.push(v[1]);
       }
       for (const p of Pack.sort()) {
         const h = await HashFile(path.join(packagePath, p));
@@ -179,7 +177,6 @@ export default class pack {
         }
         HASH += h;
       }
-
       try {
         tar.c(
           {

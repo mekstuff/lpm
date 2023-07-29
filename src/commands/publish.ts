@@ -51,9 +51,9 @@ export default class publish extends pack {
           });
         }
       } else {
-        logreport.warn(
-          "scripts detected but `--no-scripts` flag was passed, not executing."
-        );
+        // logreport.warn(
+        //   "scripts detected but `--no-scripts` flag was passed, not executing."
+        // );
       }
     }
     const packageinlpmdir = await CreateLPMPackageDirectory(result.name);
