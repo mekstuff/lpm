@@ -165,10 +165,11 @@ export default class pack {
     });
     let HASH = "";
     let PACKAGE_HASH: string | undefined;
+
     if (MapPack) {
       const Pack: string[] = [];
       for (const v of MapPack) {
-        Pack.push(v[1]);
+        Pack.push(v[0]);
       }
       for (const p of Pack.sort()) {
         const h = await HashFile(path.join(packagePath, p));

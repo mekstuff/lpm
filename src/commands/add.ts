@@ -196,7 +196,7 @@ export async function AddFilesFromLockData(
   try {
     forEachDep(NORMAL_DEPS);
     forEachDep(DEV_DEPS, "--dev");
-    console.log(LogTree.parse(tree));
+    console.log("\n" + LogTree.parse(tree));
   } catch (err) {
     logreport.error(
       `Failed to install packages with ${chalk.blue(
