@@ -29,6 +29,15 @@ export default class push {
       logreport.error("Package does not have a name.");
       process.exit(1);
     }
+    // const ALL_DEPS = await GetAllDependantsOfPackage(
+    //   PackageJSON.result,
+    //   new Map(),
+    //   cwd
+    // );
+    // const x = true;
+    // if (x === true) {
+    //   process.exit();
+    // }
     const LPMPackagesJSON = await ReadLPMPackagesJSON();
     const pkg = LPMPackagesJSON.packages[name];
     if (!pkg) {

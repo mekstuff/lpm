@@ -12,6 +12,15 @@ interface PackOptions {
   scripts?: boolean;
 }
 
+async function HashPackageManagerLock(PackagePath: string) {
+  const YARN_PATH = path.join(PackagePath, "yarn.lock");
+  const YARN = fs.existsSync(YARN_PATH);
+  if (YARN) {
+    return await HashFile(YARN_PATH);
+  }
+  return;
+}
+
 async function HashFile(filePath: string) {
   return new Promise<string>(async (resolve) => {
     if (fs.statSync(filePath).isDirectory()) {
@@ -197,7 +206,7 @@ export default class pack {
       logreport.error("Could not retrieve package hash.");
       process.exit(1);
     }
-
+    PACKAGE_HASH += await HashPackageManagerLock(packagePath); //We also hash the lock file from the package manager. This detects changes within dependencies of dependencies.
     const pack_signature =
       crypto.createHash("md5").update(HASH).digest("hex") +
       "-" +

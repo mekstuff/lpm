@@ -176,7 +176,7 @@ type ILPMPackagesJSON_Package = {
   installations: string[];
   publish_sig: string;
 };
-interface ILPMPackagesJSON {
+export interface ILPMPackagesJSON {
   packages: { [key: string]: ILPMPackagesJSON_Package };
 }
 
@@ -282,10 +282,10 @@ type LOCKFILEPKG = {
   resolve: string;
   publish_sig: string;
   dependencyScope?:
-    | "peerDependency"
-    | "devDependency"
-    | "optionalDependency"
-    | "dependency";
+    | "peerDependencies"
+    | "devDependencies"
+    | "optionalDependencies"
+    | "dependencies";
 };
 interface LOCKFILE {
   pkgs: { [key: string]: LOCKFILEPKG };
@@ -293,11 +293,15 @@ interface LOCKFILE {
 
 export async function ReadLockFileFromCwd(
   cwd?: string,
-  warnNoExist?: boolean
+  warnNoExist?: boolean,
+  noLogs?: boolean
 ): Promise<LOCKFILE> {
   cwd = cwd || ".";
   try {
     if (!fs.existsSync(path.join(cwd, "lpm.lock"))) {
+      if (noLogs) {
+        return undefined as unknown as LOCKFILE;
+      }
       if (warnNoExist) {
         logreport.warn(`No lock file exists in ${path.resolve(cwd)}.`);
         return undefined as unknown as LOCKFILE;
@@ -344,16 +348,16 @@ function GetPackageDependencyScope(
     TargetPackageJSON.dependencies &&
     TargetPackageJSON.dependencies[Package]
   ) {
-    return "dependency";
+    return "dependencies";
   }
   //devDependency
   if (
     TargetPackageJSON.devDependencies &&
     TargetPackageJSON.devDependencies[Package]
   ) {
-    return "devDependency";
+    return "devDependencies";
   }
-  return "dependency";
+  return "dependencies";
 }
 
 export type RequireFileChangeGenerateObj = {
@@ -407,6 +411,7 @@ export async function GenerateLockFileAtCwd(cwd?: string): Promise<{
                 const IS_SAME_PACKAGE_JSON =
                   lockpsigsplit[1] === pubsigsplit[1];
                 if (IS_SAME_PACKAGE_JSON) {
+                  // RequiresInstall.push(f);
                   RequiresNode_Modules_Injection.push(f); //If the package.json remains the same, just inject the module into node_modules instead of updating with package manager.
                 } else {
                   RequiresInstall.push(f);

@@ -13,6 +13,7 @@ import {
   GetLPMPackagesJSON,
   ReadLPMPackagesJSON,
   ReadLockFileFromCwd,
+  ILPMPackagesJSON,
 } from "../utils/lpmfiles.js";
 import path from "path";
 import { execSync } from "child_process";
@@ -22,6 +23,60 @@ export interface AddOptions {
   packageManager?: SUPPORTED_PACKAGE_MANAGERS;
   showPmLogs?: boolean;
 }
+
+/**
+ * TODO: Since add injects modules, It updates dependencies without publishing/pushing. This behaviour may need to be changed
+ */
+const InjectToNode_Modules = async (
+  name: string,
+  resolve: string,
+  WORKING_DIRECTORY: string
+) => {
+  const { OrginizationName, PackageName } = await ParsePackageName(name);
+  const p = path.join(WORKING_DIRECTORY, "node_modules", name);
+  try {
+    if (fs.existsSync(p)) {
+      fs.rmSync(p, { recursive: true, force: true });
+    }
+    fs.cpSync(
+      resolve,
+      path.join(
+        WORKING_DIRECTORY,
+        "node_modules",
+        OrginizationName,
+        PackageName
+      ),
+      { recursive: true }
+    );
+  } catch (e) {
+    logreport.error(`Failed to inject package ${name} => ${e}`);
+  }
+};
+
+const ForEachInjectInstallation = async (
+  installations: string[],
+  name: string,
+  resolve: string,
+  LPMPackages: ILPMPackagesJSON["packages"]
+) => {
+  for (const x of installations) {
+    await InjectToNode_Modules(name, resolve, x);
+    // console.log("\nHERE: ", x, name, "\n");
+    const { success, result } = await ReadPackageJSON(x);
+    if (!success || typeof result === "string") {
+      continue;
+    }
+    const published = LPMPackages[result.name || ""];
+    if (published) {
+      await ForEachInjectInstallation(
+        published.installations,
+        name,
+        resolve,
+        LPMPackages
+      );
+    }
+  }
+};
 
 export async function AddFilesFromLockData(
   PackageManager: SUPPORTED_PACKAGE_MANAGERS,
@@ -42,23 +97,19 @@ export async function AddFilesFromLockData(
       "log",
       true
     );
+
+    // const ALLTOINJECTDEPS = await GetAllDependenciesForInjection(ToInject);
+
     for (const val of ToInject) {
-      const { OrginizationName, PackageName } = await ParsePackageName(
-        val.name
+      await ForEachInjectInstallation(
+        val.data.installations,
+        val.name,
+        val.data.resolve,
+        (
+          await ReadLPMPackagesJSON()
+        ).packages
       );
-      const p = path.join(cwd, "node_modules", val.name);
-      try {
-        if (fs.existsSync(p)) {
-          fs.rmSync(p, { recursive: true, force: true });
-        }
-        fs.cpSync(
-          val.data.resolve,
-          path.join(cwd, "node_modules", OrginizationName, PackageName),
-          { recursive: true }
-        );
-      } catch (e) {
-        logreport.error(`Failed to inject package ${val.name} => ${e}`);
-      }
+      // await InjectToNode_Modules(val.name, val.data.resolve, cwd);
     }
   }
   if (ToInstall.length > 0) {
@@ -143,7 +194,7 @@ export async function AddFilesFromLockData(
         name: pkgName,
         install: str,
       };
-      if (pkg.dependencyScope === "devDependency") {
+      if (pkg.dependencyScope === "devDependencies") {
         DEV_DEPS.push(data);
       } else {
         NORMAL_DEPS.push(data);
