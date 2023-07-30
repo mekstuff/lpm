@@ -54,34 +54,58 @@ export default class list {
       }
       const children: Tree[] = [];
       if (Options.depth !== 0) {
-        LPMPackagesJSON.packages[Package].installations.forEach(
-          (installation) => {
-            let name: string;
-            try {
-              name = JSON.parse(
-                fs
-                  .readFileSync(path.join(installation, "package.json"))
-                  .toString()
-              ).name;
-            } catch (e) {
-              name = installation + " | " + chalk.red("No package.json");
-            }
-            if (
-              fs.existsSync(path.join(process.cwd(), "node_modules", Package))
-            ) {
-              name += " | " + chalk.yellow("Not installed.");
-            }
-            children.push({
-              name: name,
-            });
+        for (const installation of LPMPackagesJSON.packages[Package]
+          .installations) {
+          let name: string;
+          let installed_signature: string | undefined;
+          try {
+            name = JSON.parse(
+              fs
+                .readFileSync(path.join(installation, "package.json"))
+                .toString()
+            ).name;
+          } catch (e) {
+            name = installation + " | " + chalk.red("No package.json");
           }
-        );
+          try {
+            const LOCK = await ReadLockFileFromCwd(
+              installation,
+              undefined,
+              true
+            );
+            if (LOCK) {
+              const t = LOCK.pkgs[Package] && LOCK.pkgs[Package].publish_sig;
+              if (t) {
+                installed_signature = t;
+              } else {
+                installed_signature = "no-install-signature";
+              }
+            }
+          } catch (e) {
+            installed_signature = "failed-to-read-publish-signature";
+          }
+          if (
+            fs.existsSync(path.join(process.cwd(), "node_modules", Package))
+          ) {
+            name += " | " + chalk.yellow("Not installed.");
+          }
+          const SHOW_SIGNATURE =
+            installed_signature ===
+            LPMPackagesJSON.packages[Package].publish_sig
+              ? chalk.green(installed_signature)
+              : chalk.yellow(installed_signature);
+          name += " | " + SHOW_SIGNATURE;
+          children.push({
+            name: name,
+          });
+        }
       }
 
       tree.push({
         name:
+          "\n" +
           Package +
-          chalk.yellow(` | ${LPMPackagesJSON.packages[Package].publish_sig}`),
+          chalk.bold(` | ${LPMPackagesJSON.packages[Package].publish_sig}`),
         children: children,
       });
     }
@@ -97,8 +121,9 @@ export default class list {
         await this.List(targetPackage, options);
       })
       .command("all [packageName]")
-      .option("-d, --depth <number>", "List all published packages", "0")
+      .option("-d, --depth <number>", "List all published packages", "1")
       .action(async (targetPackage, options) => {
+        //TODO: Fix: depth is always 1 no matter if it was set in terminal.
         await this.List(targetPackage, { ...options, all: true });
       });
   }
