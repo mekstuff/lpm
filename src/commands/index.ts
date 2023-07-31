@@ -28,6 +28,8 @@ import * as runrelease from "./run-release.js";
 import * as _import from "./import.js";
 import * as _export from "./export.js";
 
+import * as outdated from "./outdated.js";
+
 const commands = {
   add,
   addlink,
@@ -47,6 +49,7 @@ const commands = {
   runrelease,
   _import,
   _export,
+  outdated,
 };
 
 export default commands;

@@ -63,16 +63,26 @@ export default class preprare {
             "^" + pkgjson.result.version
           )}`,
         });
-        PackageFile.result.dependencies[lockpkg] = ("^" +
-          pkgjson.result.version) as string;
+        const scope = LockFile.pkgs[lockpkg].dependencyScope || "dependencies";
+        const tdepscope = PackageFile.result[scope];
+        if (!tdepscope) {
+          logreport.error("Invalid dep: " + lockpkg);
+          process.exit(1);
+        }
+        tdepscope[lockpkg] = "^" + pkgjson.result.version;
       }
     } else {
       for (const lockpkg in LockFile.pkgs) {
         subTreeChildren.push({
           name: `${chalk.green(lockpkg)} ✓`,
         });
-        PackageFile.result.dependencies[lockpkg] =
-          "link:" + LockFile.pkgs[lockpkg].resolve;
+        const scope = LockFile.pkgs[lockpkg].dependencyScope || "dependencies";
+        const tdepscope = PackageFile.result[scope];
+        if (!tdepscope) {
+          logreport.error("Invalid dep: " + lockpkg);
+          process.exit(1);
+        }
+        tdepscope[lockpkg] = "file:" + LockFile.pkgs[lockpkg].resolve;
       }
     }
     tree.push({
@@ -121,8 +131,11 @@ export default class preprare {
 
         const InDevModePackages: string[] = [];
         for (const pkg in LockFile.pkgs) {
-          const InJSON = PackageJSON.result?.dependencies?.[pkg];
-          if (InJSON === "link:" + LockFile.pkgs[pkg].resolve) {
+          const InJSON =
+            PackageJSON.result?.[
+              LockFile.pkgs[pkg].dependencyScope || "dependencies"
+            ]?.[pkg];
+          if (InJSON === "file:" + LockFile.pkgs[pkg].resolve) {
             InDevModePackages.push(InJSON);
           }
         }

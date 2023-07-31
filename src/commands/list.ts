@@ -14,6 +14,7 @@ interface ListOptions {
 export default class list {
   async List(targetPackage: string | undefined, Options: ListOptions) {
     Options.depth = Number(Options.depth);
+    const LPMPackagesJSON = await ReadLPMPackagesJSON();
     // Options.depth = (Options.depth === undefined && 1) || Options.depth;
     if (!Options.all) {
       const PackageJSON = await ReadPackageJSON(process.cwd());
@@ -31,9 +32,20 @@ export default class list {
         if (targetPackage && targetPackage !== Package) {
           continue;
         }
+        const pkg = LockFile.pkgs[Package];
+        let SHOW_NAME = Package;
+        const PublishedInfo = LPMPackagesJSON.packages[Package];
+        if (PublishedInfo) {
+          if (PublishedInfo.publish_sig === pkg.publish_sig) {
+            SHOW_NAME += ` | ${chalk.green(pkg.publish_sig)}`;
+          } else {
+            SHOW_NAME += ` | ${chalk.yellow(pkg.publish_sig)}`;
+          }
+        } else {
+          SHOW_NAME += ` | ${chalk.red("NOT PUBLISHED!")}`;
+        }
         subTreeChildren.push({
-          name:
-            Package + chalk.yellow(` | ${LockFile.pkgs[Package].publish_sig}`),
+          name: SHOW_NAME,
         });
       }
       tree.push({
@@ -45,7 +57,6 @@ export default class list {
     }
 
     //--all
-    const LPMPackagesJSON = await ReadLPMPackagesJSON();
     const tree: Tree[] = [];
 
     for (const Package in LPMPackagesJSON.packages) {
@@ -84,10 +95,9 @@ export default class list {
           } catch (e) {
             installed_signature = "failed-to-read-publish-signature";
           }
-          if (
-            fs.existsSync(path.join(process.cwd(), "node_modules", Package))
-          ) {
-            name += " | " + chalk.yellow("Not installed.");
+          const p = path.join(installation, "node_modules", Package);
+          if (!fs.existsSync(p)) {
+            name += " | " + chalk.yellow("Not in node_modules");
           }
           const SHOW_SIGNATURE =
             installed_signature ===
