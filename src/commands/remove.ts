@@ -6,9 +6,10 @@ import logreport from "../utils/logreport.js";
 import {
   GenerateLockFileAtCwd,
   ReadLockFileFromCwd,
-  RemoveInstallationsToGlobalPackage,
+  RemoveInstallationsFromGlobalPackage,
 } from "../utils/lpmfiles.js";
 import { exec } from "child_process";
+import { BulkRemovePackagesFromLocalCwdStore } from "./add.js";
 
 interface RemoveOptions {
   packageManager?: SUPPORTED_PACKAGE_MANAGERS;
@@ -60,7 +61,7 @@ export default class remove {
 
     logreport.Elapse(`Removing from global installations...`, "REMOVE_PKGS");
     try {
-      await RemoveInstallationsToGlobalPackage(Packages, [process.cwd()]);
+      await RemoveInstallationsFromGlobalPackage(Packages, [process.cwd()]);
     } catch (e) {
       if (!Options.skipRegistryCheck) {
         logreport.error(e);
@@ -114,7 +115,7 @@ export default class remove {
       `Removed from package manager with exit code ${await p}`,
       "REMOVE_PKGS"
     );
-
+    await BulkRemovePackagesFromLocalCwdStore(process.cwd(), Packages, true);
     logreport.Elapse(`Generating LOCK file...`, "REMOVE_PKGS");
     await GenerateLockFileAtCwd();
     logreport.Elapse(`LOCK file Generated`, "REMOVE_PKGS", true);

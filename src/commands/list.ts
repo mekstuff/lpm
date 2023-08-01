@@ -72,7 +72,7 @@ export default class list {
           try {
             name = JSON.parse(
               fs
-                .readFileSync(path.join(installation, "package.json"))
+                .readFileSync(path.join(installation.path, "package.json"))
                 .toString()
             ).name;
           } catch (e) {
@@ -80,7 +80,7 @@ export default class list {
           }
           try {
             const LOCK = await ReadLockFileFromCwd(
-              installation,
+              installation.path,
               undefined,
               true
             );
@@ -95,7 +95,7 @@ export default class list {
           } catch (e) {
             installed_signature = "failed-to-read-publish-signature";
           }
-          const p = path.join(installation, "node_modules", Package);
+          const p = path.join(installation.path, "node_modules", Package);
           if (!fs.existsSync(p)) {
             name += " | " + chalk.yellow("Not in node_modules");
           }

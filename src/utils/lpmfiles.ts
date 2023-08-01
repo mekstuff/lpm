@@ -171,17 +171,30 @@ export async function WriteLPMPackagesJSON(
   return wrote;
 }
 
-type ILPMPackagesJSON_Package = {
+export type ILPMPackagesJSON_Package_installations_installtypes =
+  | "default"
+  | "import";
+
+export type ILPMPackagesJSON_Package = {
   resolve: string;
-  installations: string[];
+  installations: {
+    path: string;
+    install_type: ILPMPackagesJSON_Package_installations_installtypes;
+  }[];
   publish_sig: string;
+  requires_import?: boolean;
 };
 export interface ILPMPackagesJSON {
   packages: { [key: string]: ILPMPackagesJSON_Package };
 }
 
 export async function AddPackagesToLPMJSON(
-  Packages: { name: string; resolve: string; publish_signature: string }[]
+  Packages: {
+    name: string;
+    resolve: string;
+    publish_signature: string;
+    requires_import?: boolean;
+  }[]
 ): Promise<boolean> {
   logreport.assert(typeof Packages === "object", "Invalid Packages passed.");
   try {
@@ -192,6 +205,7 @@ export async function AddPackagesToLPMJSON(
         resolve: pkg.resolve,
         installations: (ExistingPkgData && ExistingPkgData.installations) || [],
         publish_sig: pkg.publish_signature,
+        requires_import: pkg.requires_import,
       };
       LPMPackagesJSON.packages[pkg.name] = NewData;
     });
@@ -229,7 +243,7 @@ export async function RemovePackagesFromLPMJSON(
 }
 export async function AddInstallationsToGlobalPackage(
   packageNames: string[],
-  Installations: string[]
+  Installations: ILPMPackagesJSON_Package["installations"]
 ) {
   const LPMPackagesJSON = await ReadLPMPackagesJSON();
   packageNames.forEach((packageName) => {
@@ -247,14 +261,17 @@ export async function AddInstallationsToGlobalPackage(
       );
       OldInstallationData = [];
     }
-    TargetPackage.installations = [
-      ...new Set([...OldInstallationData, ...Installations]),
-    ];
+    //filter so paths are unique and not duplicated
+    const t = [...OldInstallationData, ...Installations];
+    const paths = t.map(({ path }) => path);
+    TargetPackage.installations = t.filter(
+      ({ path }, index) => !paths.includes(path, index + 1)
+    );
   });
   await WriteLPMPackagesJSON(LPMPackagesJSON);
 }
 
-export async function RemoveInstallationsToGlobalPackage(
+export async function RemoveInstallationsFromGlobalPackage(
   packageNames: string[],
   Installations: string[]
 ) {
@@ -268,7 +285,7 @@ export async function RemoveInstallationsToGlobalPackage(
       );
     }
     TargetPackage.installations = TargetPackage.installations.filter((e) => {
-      const f = Installations.indexOf(e);
+      const f = Installations.indexOf(e.path);
       if (f !== -1) {
         return false;
       }
@@ -278,7 +295,7 @@ export async function RemoveInstallationsToGlobalPackage(
 }
 
 //LOCK
-type LOCKFILEPKG = {
+export type LOCKFILEPKG = {
   resolve: string;
   publish_sig: string;
   dependencyScope?:
@@ -286,6 +303,7 @@ type LOCKFILEPKG = {
     | "devDependencies"
     | "optionalDependencies"
     | "dependencies";
+  install_type: ILPMPackagesJSON_Package_installations_installtypes;
 };
 interface LOCKFILE {
   pkgs: { [key: string]: LOCKFILEPKG };
@@ -363,6 +381,7 @@ function GetPackageDependencyScope(
 export type RequireFileChangeGenerateObj = {
   name: string;
   data: ILPMPackagesJSON_Package;
+  install_type: ILPMPackagesJSON_Package_installations_installtypes;
 };
 /**
  * Returns packages that should be installed/uninstall based on the new lock file.
@@ -394,7 +413,7 @@ export async function GenerateLockFileAtCwd(cwd?: string): Promise<{
         (PreviousLockfileData.pkgs && PreviousLockfileData.pkgs[Package]) || {};
       const PackageData = LPMPackagesJSON.packages[Package];
       PackageData.installations.forEach(async (installation) => {
-        if (installation === cwd) {
+        if (installation.path === cwd) {
           if (!LOCK.pkgs[Package]) {
             //a new publish was made but installed version has old/uknown signature. so request update
             if (
@@ -404,6 +423,7 @@ export async function GenerateLockFileAtCwd(cwd?: string): Promise<{
               const f = {
                 name: Package,
                 data: PackageData,
+                install_type: installation.install_type,
               };
               if (PreviousInLock.publish_sig !== undefined) {
                 const lockpsigsplit = PreviousInLock.publish_sig.split("-");
@@ -424,6 +444,7 @@ export async function GenerateLockFileAtCwd(cwd?: string): Promise<{
             LOCK.pkgs[Package] = {
               resolve: PackageData.resolve,
               publish_sig: PackageData.publish_sig,
+              install_type: installation.install_type,
               // pm: PreviousInLock.pm || undefined,
             };
 

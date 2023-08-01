@@ -13,6 +13,7 @@ export default class push {
       Log?: boolean;
       scripts?: boolean;
       force?: boolean;
+      requiresImport?: boolean;
     },
     CaptureNotPublished?: boolean
   ) {
@@ -50,6 +51,8 @@ export default class push {
     const OLD_PUBLISH_SIG = pkg.publish_sig;
     const NEW_PUBLISH_SIG = await getcommand("publish").Publish(cwd, {
       scripts: options.scripts,
+      requiresImport: options.requiresImport,
+      log: options.Log,
     });
     if (OLD_PUBLISH_SIG === NEW_PUBLISH_SIG && !options.force) {
       logreport("Nothing changed.", "log", true);
@@ -71,7 +74,7 @@ export default class push {
             Cwd: installation,
             Log: options.Log,
           });
-          await this.Push(installation, options, true);
+          await this.Push(installation.path, options, true);
           Total_Updated++;
         } catch (e) {
           logreport.warn(
@@ -101,6 +104,10 @@ export default class push {
       .option(
         "-f, --force [boolean]",
         "Forces the publish even if nothing was changed."
+      )
+      .option(
+        "--requires-import [boolean]",
+        "For the package to be installed it must be used as an imported package."
       )
       .description(
         "Publishes the package then updates all other packages that has it installed."

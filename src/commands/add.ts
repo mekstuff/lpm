@@ -14,6 +14,9 @@ import {
   ReadLPMPackagesJSON,
   ReadLockFileFromCwd,
   ILPMPackagesJSON,
+  ILPMPackagesJSON_Package,
+  ILPMPackagesJSON_Package_installations_installtypes,
+  LOCKFILEPKG,
 } from "../utils/lpmfiles.js";
 import path from "path";
 import { execSync } from "child_process";
@@ -22,6 +25,104 @@ import { ParsePackageName, ReadPackageJSON } from "../utils/PackageReader.js";
 export interface AddOptions {
   packageManager?: SUPPORTED_PACKAGE_MANAGERS;
   showPmLogs?: boolean;
+  import?: boolean;
+}
+
+export async function BulkRemovePackagesFromLocalCwdStore(
+  cwd: string,
+  packages: string[],
+  noErrors?: boolean
+) {
+  packages.map(async (p) => {
+    await RemovePackageFromLocalCwdStore(cwd, p, noErrors);
+  });
+}
+
+async function RemovePackageFromLocalCwdStore(
+  cwd: string,
+  pkgName: string,
+  noErrors?: boolean
+) {
+  const cwd_lpm_path = path.join(cwd, ".lpm");
+  if (!fs.existsSync(cwd_lpm_path)) {
+    return;
+  }
+  try {
+    fs.rmSync(path.join(cwd_lpm_path, pkgName), {
+      recursive: true,
+      force: true,
+    });
+    if (fs.readdirSync(cwd_lpm_path).length === 0) {
+      fs.rmSync(cwd_lpm_path, { recursive: true, force: true });
+    }
+  } catch (err) {
+    if (!noErrors) {
+      logreport.error(
+        "Could not remove package from => " + path.join(cwd_lpm_path, pkgName)
+      );
+    }
+  }
+}
+
+async function AddPackageToLocalCwdStore(
+  cwd: string,
+  pkgName: string,
+  pkg: Pick<LOCKFILEPKG, "install_type" | "resolve">
+): Promise<string> {
+  const cwd_lpm_path = path.join(cwd, ".lpm");
+  if (!fs.existsSync(cwd_lpm_path)) {
+    try {
+      fs.mkdirSync(cwd_lpm_path, { recursive: true });
+    } catch (e) {
+      logreport.error(`Could not create ${cwd_lpm_path}. => ${e}`);
+      process.exit(1);
+    }
+  }
+  const pkgNameSplit = pkgName.split("/");
+  let Orginization: string | undefined;
+  let Package: string;
+  if (pkgNameSplit.length > 1) {
+    Orginization = pkgNameSplit[0];
+    Package = pkgNameSplit[1];
+  } else {
+    Package = pkgName;
+  }
+  let InstallationPath = path.join(
+    cwd_lpm_path,
+    Orginization ? Orginization : "",
+    Package
+  );
+
+  if (
+    Orginization !== undefined &&
+    !fs.existsSync(path.join(cwd_lpm_path, Orginization))
+  ) {
+    try {
+      fs.mkdirSync(path.join(cwd_lpm_path, Orginization), {
+        recursive: true,
+      });
+    } catch (e) {
+      logreport.error(
+        `Could not create originization scope path for "${Orginization}". => ${e}`
+      );
+      process.exit(1);
+    }
+  }
+  /* */
+  try {
+    /* FOR RESOLVE LOCALLY IN .lpm FOLDER */
+    if (pkg.install_type === "import") {
+      fs.cpSync(pkg.resolve, InstallationPath, {
+        force: true,
+        recursive: true,
+      });
+      InstallationPath = path.relative(cwd, InstallationPath);
+    }
+    /* */
+  } catch (err) {
+    logreport.error(`Failed to copy pkg "${pkgName}" => ${err}`);
+  }
+  return InstallationPath;
 }
 
 /**
@@ -30,8 +131,20 @@ export interface AddOptions {
 const InjectToNode_Modules = async (
   name: string,
   resolve: string,
-  WORKING_DIRECTORY: string
+  WORKING_DIRECTORY: string,
+  install_type: ILPMPackagesJSON_Package_installations_installtypes
 ) => {
+  // await RemovePackageFromLocalCwdStore(WORKING_DIRECTORY, name, true);
+  console.log(install_type);
+  if (install_type === "import") {
+    /**
+     * Update resolve to use the local cwd store instead.
+     */
+    resolve = await AddPackageToLocalCwdStore(WORKING_DIRECTORY, name, {
+      install_type: install_type,
+      resolve,
+    });
+  }
   const { OrginizationName, PackageName } = await ParsePackageName(name);
   const p = path.join(WORKING_DIRECTORY, "node_modules", name);
   try {
@@ -54,15 +167,16 @@ const InjectToNode_Modules = async (
 };
 
 const ForEachInjectInstallation = async (
-  installations: string[],
+  // installations: string[],
+  installations: ILPMPackagesJSON_Package["installations"],
   name: string,
   resolve: string,
   LPMPackages: ILPMPackagesJSON["packages"]
 ) => {
   for (const x of installations) {
-    await InjectToNode_Modules(name, resolve, x);
+    await InjectToNode_Modules(name, resolve, x.path, x.install_type);
     // console.log("\nHERE: ", x, name, "\n");
-    const { success, result } = await ReadPackageJSON(x);
+    const { success, result } = await ReadPackageJSON(x.path);
     if (!success || typeof result === "string") {
       continue;
     }
@@ -125,6 +239,7 @@ export async function AddFilesFromLockData(
       TargetPkgs[val.name] = {
         resolve: val.data.resolve,
         publish_sig: val.data.publish_sig,
+        install_type: val.install_type,
       };
     }
   } else {
@@ -132,75 +247,36 @@ export async function AddFilesFromLockData(
     return;
   }
 
-  /* FOR RESOLVE LOCALLY IN .lpm FOLDER
-  const cwd_lpm_path = path.join(cwd, ".lpm");
-  if (!fs.existsSync(cwd_lpm_path)) {
-    try {
-      fs.mkdirSync(cwd_lpm_path, { recursive: true });
-    } catch (e) {
-      logreport.error(`Could not create ${cwd_lpm_path}. => ${e}`);
-      process.exit(1);
-    }
-  }
-  */
+  /* FOR RESOLVE LOCALLY IN .lpm FOLDER */
+
+  /* */
   type DEPSDATA = { name: string; install: string };
   const NORMAL_DEPS: DEPSDATA[] = [];
   const DEV_DEPS: DEPSDATA[] = [];
 
   for (const pkgName in TargetPkgs) {
+    let InstallationPath: string | undefined;
     const pkg = TargetPkgs[pkgName];
-    /* FOR RESOLVE LOCALLY IN .lpm FOLDER
-    const pkgNameSplit = pkgName.split("/");
-    let Orginization: string | undefined;
-    let Package: string;
-    if (pkgNameSplit.length > 1) {
-      Orginization = pkgNameSplit[0];
-      Package = pkgNameSplit[1];
+    /* FOR RESOLVE LOCALLY IN .lpm FOLDER */
+    if (pkg.install_type === "import") {
+      InstallationPath = await AddPackageToLocalCwdStore(cwd, pkgName, pkg);
     } else {
-      Package = pkgName;
+      InstallationPath = pkg.resolve;
     }
-    const InstallationPath = path.join(
-      cwd_lpm_path,
-      Orginization ? Orginization : "",
-      Package
-    );
-    
-    if (
-      Orginization !== undefined &&
-      !fs.existsSync(path.join(cwd_lpm_path, Orginization))
-    ) {
-      try {
-        fs.mkdirSync(path.join(cwd_lpm_path, Orginization), {
-          recursive: true,
-        });
-      } catch (e) {
-        logreport.error(
-          `Could not create originization scope path for "${Orginization}". => ${e}`
-          );
-          process.exit(1);
-        }
-      }
-      */
-    try {
-      /* FOR RESOLVE LOCALLY IN .lpm FOLDER
-      fs.cpSync(pkg.resolve, InstallationPath, {
-        force: true,
-        recursive: true,
-      });
-      const str = `file:${path.relative(cwd, InstallationPath)}`;
-      */
-      const str = `file:${pkg.resolve}`;
-      const data = {
-        name: pkgName,
-        install: str,
-      };
-      if (pkg.dependencyScope === "devDependencies") {
-        DEV_DEPS.push(data);
-      } else {
-        NORMAL_DEPS.push(data);
-      }
-    } catch (err) {
-      logreport.error(`Failed to copy pkg "${pkgName}" => ${err}`);
+    if (InstallationPath === undefined) {
+      logreport.error("Could not resolve installation path");
+      process.exit(1);
+    }
+
+    const str = `file:${InstallationPath}`;
+    const data = {
+      name: pkgName,
+      install: str,
+    };
+    if (pkg.dependencyScope === "devDependencies") {
+      DEV_DEPS.push(data);
+    } else {
+      NORMAL_DEPS.push(data);
     }
   }
   const PackageJSON = await ReadPackageJSON(cwd, undefined, true);
@@ -301,12 +377,24 @@ export default class add {
         typeof InGlobalIndex.installations === "object",
         `"${pkg}" Package does not have a valid installations field in global index! ${await GetLPMPackagesJSON()}`
       );
+      if (!Options.import && InGlobalIndex.requires_import === true) {
+        logreport.error(
+          `"${pkg}" requires to be imported, try ${chalk.bold(
+            `lpm import ${pkg}`
+          )}`
+        );
+      }
       PKGS_RESOLVES.push({
         name: pkg,
         resolve: InGlobalIndex.resolve,
       });
     }
-    await AddInstallationsToGlobalPackage(Packages, [process.cwd()]);
+    await AddInstallationsToGlobalPackage(Packages, [
+      {
+        path: process.cwd(),
+        install_type: Options.import ? "import" : "default",
+      },
+    ]);
     const { RequiresInstall, RequiresNode_Modules_Injection } =
       await GenerateLockFileAtCwd();
     await AddFilesFromLockData(
@@ -330,6 +418,10 @@ export default class add {
         "-log, --show-pm-logs [boolean]",
         "Show package managers output in terminal.",
         false
+      )
+      .option(
+        "--import [boolean]",
+        "Adds the package to a .local-pm and install from local path, Useful for packages that aren't actually published to a registry."
       )
       .action(async (packages, options) => {
         await this.Add(packages, options);

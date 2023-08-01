@@ -32,7 +32,7 @@ export default class outdated {
       const OUTDATED: OUTDATEDLIST = [];
       for (const installation of pkg.installations) {
         const InstallationLOCK = await ReadLockFileFromCwd(
-          installation,
+          installation.path,
           undefined,
           true
         );
@@ -40,7 +40,7 @@ export default class outdated {
           // No lock file in the installation, prompt install?
           return;
         }
-        const pkgJSON = await ReadPackageJSON(installation);
+        const pkgJSON = await ReadPackageJSON(installation.path);
         if (!pkgJSON.success || typeof pkgJSON.result === "string") {
           LogReport.error(pkgJSON.result);
           process.exit(1);
@@ -54,7 +54,7 @@ export default class outdated {
             name:
               pkgJSON.result.name ||
               "NO-NAME-SPECIFIED-IN-JSON => " + installation,
-            path: installation,
+            path: installation.path,
           });
         }
       }

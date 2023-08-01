@@ -26,7 +26,6 @@ import * as bulk from "./bulk.js";
 import * as runrelease from "./run-release.js";
 
 import * as _import from "./import.js";
-import * as _export from "./export.js";
 
 import * as outdated from "./outdated.js";
 
@@ -48,7 +47,6 @@ const commands = {
   bulk,
   runrelease,
   _import,
-  _export,
   outdated,
 };
 

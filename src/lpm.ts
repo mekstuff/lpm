@@ -2,9 +2,13 @@
 
 import { Command } from "commander";
 import commands from "./commands/index.js";
-import { ReadLockFileFromCwd } from "./utils/lpmfiles.js";
-import { AddOptions } from "./commands/add-link.js";
-import logreport from "./utils/logreport.js";
+import {
+  ReadLPMPackagesJSON,
+  ReadLockFileFromCwd,
+  RequireFileChangeGenerateObj,
+} from "./utils/lpmfiles.js";
+import { AddOptions, GetPreferredPackageManager } from "./commands/add-link.js";
+import { AddFilesFromLockData } from "./commands/add.js";
 
 const program = new Command();
 
@@ -28,11 +32,30 @@ program.action(async (Options: AddOptions) => {
     return;
   }
   const LockFile = await ReadLockFileFromCwd();
+  const LPMPackages = await ReadLPMPackagesJSON();
   const pkgs = LockFile.pkgs;
-  let ToCallInstall: string[] = [];
+  const ToCallInject: RequireFileChangeGenerateObj[] = [];
+  const ToCallAdd: RequireFileChangeGenerateObj[] = [];
   for (const Package in pkgs) {
-    ToCallInstall.push(Package);
+    const d = {
+      name: Package,
+      data: LPMPackages.packages[Package],
+      install_type: pkgs[Package].install_type,
+    };
+    if (pkgs[Package].install_type === "import") {
+      ToCallInject.push(d);
+    } else {
+      ToCallAdd.push(d);
+    }
   }
+  await AddFilesFromLockData(
+    Options.packageManager || GetPreferredPackageManager(),
+    Options.showPmLogs,
+    process.cwd(),
+    ToCallAdd,
+    ToCallInject
+  );
+  /*
 
   if (ToCallInstall.length === 0) {
     return logreport("Nothing to install.", "log", true);
@@ -41,6 +64,7 @@ program.action(async (Options: AddOptions) => {
   ToCallInstall = [...ToCallInstall, ...Flags];
 
   getcommand("add").Add(ToCallInstall, Options);
+  */
   // execSync(`lpm add ${ToCallInstall.join(" ")}`)
 });
 /**

@@ -76,7 +76,12 @@ export default class AddLink {
       InstallPkgsCommandStr += str + " ";
     }
 
-    await AddInstallationsToGlobalPackage(Packages, [process.cwd()]);
+    await AddInstallationsToGlobalPackage(Packages, [
+      {
+        path: process.cwd(),
+        install_type: "default",
+      },
+    ]);
     logreport.Elapse(`Finished Adding to global installations`, "INSTALL_PKGS");
     logreport.Elapse(
       `Installing with package manager ${chalk.blue(

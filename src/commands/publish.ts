@@ -8,12 +8,16 @@ import {
   AddPackagesToLPMJSON,
   CreateLPMPackageDirectory,
   GetLPMPackagesDirectory,
+  ReadLPMPackagesJSON,
 } from "../utils/lpmfiles.js";
 import { execSync } from "child_process";
 import { BackUpLPMPackagesJSON } from "./backup.js";
+import enqpkg from "enquirer";
+const { prompt } = enqpkg;
 
 interface PublishOptions {
   scripts?: boolean;
+  requiresImport?: boolean;
   // push?: boolean;
 }
 
@@ -35,6 +39,29 @@ export default class publish extends pack {
     }
     if (!result.name) {
       return logreport.error("Package must have a name to publish.");
+    }
+    const LPMPackagesJSON = await ReadLPMPackagesJSON();
+    const OLDVERSION = LPMPackagesJSON.packages[result.name];
+    if (
+      OLDVERSION &&
+      OLDVERSION.requires_import === true &&
+      Options.requiresImport !== true
+    ) {
+      await prompt<{ select: "yes" | "no" }>({
+        name: "select",
+        type: "select",
+        message: `"${result.name}" was previously published with requires-import, You are currently publishing without it set. Should we set the flag?`,
+        choices: ["yes", "no"],
+      })
+        .then((res) => {
+          if (res.select === "yes") {
+            Options.requiresImport = true;
+          }
+        })
+        .catch((err) => {
+          logreport.error(err);
+          process.exit(1);
+        });
     }
     logreport.Elapse(
       `Publishing ${result?.name} ${result?.version}`,
@@ -80,6 +107,7 @@ export default class publish extends pack {
         name: result.name,
         resolve: path.join(packageinlpmdir, "pkg"),
         publish_signature: packRes.pack_signature,
+        requires_import: Options.requiresImport ? true : undefined,
       },
     ]).then((added) => {
       if (!added) {
@@ -115,7 +143,10 @@ export default class publish extends pack {
       .command("publish [packagePath]")
       .description("Packages and publishes your package to the local registry.")
       .option("--no-scripts [boolean]", "Does not run any scripts")
-      // .option("--push [boolean]", "Runs push after successfully publishing")
+      .option(
+        "--requires-import [boolean]",
+        "For the package to be installed it must be used as an imported package."
+      )
       .action(async (packagePath, Options) => {
         this.Publish(packagePath, Options);
       });
