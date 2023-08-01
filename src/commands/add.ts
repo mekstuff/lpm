@@ -134,12 +134,7 @@ const InjectToNode_Modules = async (
   WORKING_DIRECTORY: string,
   install_type: ILPMPackagesJSON_Package_installations_installtypes
 ) => {
-  // await RemovePackageFromLocalCwdStore(WORKING_DIRECTORY, name, true);
-  console.log(install_type);
   if (install_type === "import") {
-    /**
-     * Update resolve to use the local cwd store instead.
-     */
     resolve = await AddPackageToLocalCwdStore(WORKING_DIRECTORY, name, {
       install_type: install_type,
       resolve,
@@ -167,7 +162,6 @@ const InjectToNode_Modules = async (
 };
 
 const ForEachInjectInstallation = async (
-  // installations: string[],
   installations: ILPMPackagesJSON_Package["installations"],
   name: string,
   resolve: string,
@@ -175,7 +169,6 @@ const ForEachInjectInstallation = async (
 ) => {
   for (const x of installations) {
     await InjectToNode_Modules(name, resolve, x.path, x.install_type);
-    // console.log("\nHERE: ", x, name, "\n");
     const { success, result } = await ReadPackageJSON(x.path);
     if (!success || typeof result === "string") {
       continue;
@@ -212,8 +205,6 @@ export async function AddFilesFromLockData(
       true
     );
 
-    // const ALLTOINJECTDEPS = await GetAllDependenciesForInjection(ToInject);
-
     for (const val of ToInject) {
       await ForEachInjectInstallation(
         val.data.installations,
@@ -223,7 +214,6 @@ export async function AddFilesFromLockData(
           await ReadLPMPackagesJSON()
         ).packages
       );
-      // await InjectToNode_Modules(val.name, val.data.resolve, cwd);
     }
   }
   if (ToInstall.length > 0) {
@@ -309,16 +299,6 @@ export async function AddFilesFromLockData(
       name: depFlag ? depFlag.toUpperCase() + " DEPS" : "DEPS",
       children: showTreeInfo,
     });
-    /*
-    const result = PackageJSON.result as { [key: string]: any };
-    for (const d of deps) {
-      if (!result[depScope]) {
-        result[depScope] = {};
-      }
-      result[depScope][d.name] = d.install;
-    }
-    PackageJSON.result = result;
-    */
   };
   try {
     forEachDep(NORMAL_DEPS);
@@ -352,7 +332,6 @@ export default class add {
         PackageManagerFlags.push(arg);
       }
     });
-    // let execString = "";
     const GlobalPkgsIndex = await ReadLPMPackagesJSON();
     const PKGS_RESOLVES: { name: string; resolve: string }[] = [];
     for (const index in Packages) {
@@ -404,7 +383,6 @@ export default class add {
       RequiresInstall,
       RequiresNode_Modules_Injection
     );
-    // await AddFilesFromLockData();
   }
   build(program: typeof CommanderProgram) {
     program

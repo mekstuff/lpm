@@ -39,7 +39,6 @@ export async function BackUpLPMPackagesJSON(noLogs?: boolean) {
     const JSON_STR = fs.readFileSync(await GetLPMPackagesJSON(), "utf8");
     const JSON_Package = await ReadLPMPackagesJSON();
 
-    // const JSON_STR = JSON.stringify(JSON_Package);
     const backupsDirectoryPath = await GetLPMInstallationBackupDir();
     const backupsExist = fs.existsSync(backupsDirectoryPath);
     if (!backupsExist) {
@@ -110,7 +109,6 @@ export default class backup {
               ` (${chalk.blue(
                 moment(stats.birthtimeMs).fromNow()
               )})\n${path.relative(process.cwd(), path.join(Dir, Backup))}\n`,
-            // value: path.join(Dir, Backup),
           });
         }
         await prompt<{ file: string }>({
@@ -134,7 +132,6 @@ export default class backup {
             JSON.stringify(R.result, undefined, 2),
             { encoding: "utf8" }
           );
-          // await WriteLPMPackagesJSON(R.result as object);
           logreport(
             "Reverted to backed up file => " + (await GetLPMPackagesJSON())
           );

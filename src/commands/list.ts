@@ -15,7 +15,6 @@ export default class list {
   async List(targetPackage: string | undefined, Options: ListOptions) {
     Options.depth = Number(Options.depth);
     const LPMPackagesJSON = await ReadLPMPackagesJSON();
-    // Options.depth = (Options.depth === undefined && 1) || Options.depth;
     if (!Options.all) {
       const PackageJSON = await ReadPackageJSON(process.cwd());
       if (
