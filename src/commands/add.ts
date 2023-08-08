@@ -420,14 +420,16 @@ export default class add {
       const InitialNameParse = ParsePackageName(pkg);
       //if we are requiring latest, check if it's already installed and install latest relative to previously installed.
       if (InitialNameParse.PackageVersion === "latest") {
-        for (const PKG in LOCKFILE.pkgs) {
-          // const t = LOCKFILE.pkgs[PKG];
-          const p = ParsePackageName(PKG);
-          if (p.FullPackageName === InitialNameParse.FullPackageName) {
-            //update the pkg string so when fetching it will use that @version instead of @latest.
-            //if version was @latest and no semver symbol is set, use ^
-            pkg = `${p.FullPackageName}@${LOCKFILE.pkgs[PKG].sem_ver_symbol}${p.PackageVersion}`;
-            break;
+        if (LOCKFILE) {
+          for (const PKG in LOCKFILE.pkgs) {
+            // const t = LOCKFILE.pkgs[PKG];
+            const p = ParsePackageName(PKG);
+            if (p.FullPackageName === InitialNameParse.FullPackageName) {
+              //update the pkg string so when fetching it will use that @version instead of @latest.
+              //if version was @latest and no semver symbol is set, use ^
+              pkg = `${p.FullPackageName}@${LOCKFILE.pkgs[PKG].sem_ver_symbol}${p.PackageVersion}`;
+              break;
+            }
           }
         }
       } else {
