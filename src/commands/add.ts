@@ -370,7 +370,6 @@ export async function AddFilesFromLockData(
       console.error(err);
       logreport.error(err);
     }
-    await RemoveUnwantedPackagesFromLpmLocalFromSeal(cwd, useSeal);
   } else {
     if (MUST_RESOLVE_PACKAGES_FROM_useSEAL && useSeal) {
       await ResolvePackagesFromTreeSeal(cwd, useSeal); //if packages were injected and nothing was installed, we need to resolve, since we don't resolve after injection since resolve will be called twice if there's any installs.
