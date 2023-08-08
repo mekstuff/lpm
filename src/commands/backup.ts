@@ -3,6 +3,8 @@ import path from "path";
 import chalk from "chalk";
 import moment from "moment";
 import crypto from "crypto";
+import enqpkg from "enquirer";
+const { prompt } = enqpkg;
 
 import { program as CommanderProgram } from "commander";
 import {
@@ -11,9 +13,8 @@ import {
   ReadLPMPackagesJSON,
 } from "../utils/lpmfiles.js";
 import logreport from "../utils/logreport.js";
-import enqpkg from "enquirer";
 import { ReadPackageJSON } from "../utils/PackageReader.js";
-const { prompt } = enqpkg;
+import { RequiresLPMConfigSet } from "../utils/lpmconfig.js";
 
 export async function GetLPMInstallationBackupDir() {
   return path.join(await GetLPMDirectory(), "installation-backups");
@@ -84,6 +85,24 @@ export async function BackUpLPMPackagesJSON(noLogs?: boolean) {
         }
       }
     });
+    const ndir = fs.readdirSync(backupsDirectoryPath);
+    const config = await RequiresLPMConfigSet(["maximum-local-pkgs-backups"]);
+    const mlpb = Number(config["maximum-local-pkgs-backups"]);
+    if (ndir.length > mlpb) {
+      const trmv = ndir.length - mlpb;
+      ndir
+        .map((f) => ({
+          name: f,
+          time: fs.statSync(path.join(backupsDirectoryPath, f)).mtime.getTime(),
+        }))
+        .sort((a, b) => a.time - b.time)
+        .map((file) => file.name)
+        .forEach((x, i) => {
+          if (i <= trmv) {
+            fs.rmSync(path.join(backupsDirectoryPath, x));
+          }
+        });
+    }
   } catch (e) {
     logreport.warn("Something wen't wrong with backing up => " + e);
   }
@@ -94,6 +113,13 @@ export default class backup {
     const backup_program = program.command("backup").action(async () => {
       await BackUpLPMPackagesJSON(false);
     });
+    backup_program
+      .command("git")
+      .description("Backup current pkgs json file to a git repository")
+      .action(async () => {
+        // const config = await RequiresLPMConfigSet(["git-backup-repository"]);
+        // const backupdir = await GetLPMInstallationsBackup();
+      });
 
     backup_program.command("revert").action(async () => {
       try {

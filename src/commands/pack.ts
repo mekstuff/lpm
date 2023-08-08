@@ -37,31 +37,26 @@ async function HashFile(filePath: string) {
 
     fd.on("end", function () {
       hash.end();
-      resolve(hash.read()); // the desired sha1sum
-      // resolve();
+      resolve(hash.read());
     });
 
-    // read all file and pipe it (write it) to the hash object
     fd.pipe(hash);
-    /*
-    const md5sum = crypto.createHash("md5");
-    md5sum.update(relPath.replace(/\\/g, "/"));
-    stream.on("data", (data: string) => md5sum.update(data));
-    stream.on("error", reject).on("close", () => {
-      resolve(md5sum.digest("hex"));
-    });
-    */
   });
 }
 
-async function GetPackageFiles(PackagePath: string, packageJson: object) {
+async function GetPackageFiles(
+  PackagePath: string,
+  packageJson: object,
+  IGNORE?: string[],
+  INCLUDE?: string[]
+) {
   logreport.assert(PackagePath !== undefined, "Package Path Not Passed.");
   logreport.assert(packageJson !== undefined, "Package JSON Not Passed.");
 
   /**
    * We must include `lpm.lock` for when we do lpm run-release it will make sure all packages are set to versions instead of link paths.
    */
-  const MUST_INCLUDE = ["package.json"];
+  let MUST_INCLUDE = ["package.json"];
   let MUST_EXCLUDE = [
     ".gitignore",
     "node_modules",
@@ -69,6 +64,14 @@ async function GetPackageFiles(PackagePath: string, packageJson: object) {
     "yarn.lock",
     "package-lock.json",
   ];
+
+  if (IGNORE) {
+    MUST_EXCLUDE = [...MUST_EXCLUDE, ...IGNORE];
+  }
+
+  if (INCLUDE) {
+    MUST_INCLUDE = [...MUST_INCLUDE, ...INCLUDE];
+  }
 
   /**
    * We must include `lpm.lock` for when we do lpm run-release it will make sure all packages are set to versions instead of link paths.
@@ -138,7 +141,9 @@ async function GetPackageFiles(PackagePath: string, packageJson: object) {
 export default class pack {
   async Pack(
     packagePath: string | undefined,
-    Options: PackOptions
+    Options: PackOptions,
+    IGNORE?: string[],
+    INCLUDE?: string[]
   ): Promise<{ outpath: string; pack_signature: string } | undefined> {
     if (packagePath === undefined) {
       packagePath = ".";
@@ -169,7 +174,12 @@ export default class pack {
     }
     Options.out = Options.out || `${result.name}-v${result.version}.tgz`;
     logreport.Elapse(`Packaging "${result.name}"...`, "PACK");
-    const MapPack = await GetPackageFiles(packagePath, result).catch((err) => {
+    const MapPack = await GetPackageFiles(
+      packagePath,
+      result,
+      IGNORE,
+      INCLUDE
+    ).catch((err) => {
       logreport.error("Could not get files to pack " + err);
     });
     let HASH = "";
@@ -208,9 +218,15 @@ export default class pack {
     }
     PACKAGE_HASH += await HashPackageManagerLock(packagePath); //We also hash the lock file from the package manager. This detects changes within dependencies of dependencies.
     const pack_signature =
-      crypto.createHash("md5").update(HASH).digest("hex") +
+      crypto
+        .createHash("shake256", { outputLength: 5 })
+        .update(HASH)
+        .digest("hex") +
       "-" +
-      crypto.createHash("md5").update(PACKAGE_HASH).digest("hex"); //we has the package.json and append to the pack_signature so we can detect changes in package.json
+      crypto
+        .createHash("shake256", { outputLength: 3 })
+        .update(PACKAGE_HASH)
+        .digest("hex"); //we has the package.json and append to the pack_signature so we can detect changes in package.json
     const outpath = path.resolve(Options.out);
     logreport.Elapse(`Packaged => "${outpath}"`, "PACK", true);
     return { outpath, pack_signature };
@@ -220,7 +236,6 @@ export default class pack {
       .command("pack [packagePath]")
       .option("-o, --out", "Where to put tar file.")
       .option("--no-scripts [boolean]", "Running any pack related scripts.")
-      //   .option("-p, --packer", "What package manager to use to package.")
       .description(
         "Packs package to be prepared to publish. (this command is meant to be used internally but is exposed to cli if required)"
       )

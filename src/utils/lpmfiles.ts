@@ -3,9 +3,20 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import logreport from "./logreport.js";
+import pluralize from "pluralize";
 import { BackUpLPMPackagesJSON } from "../commands/backup.js";
-import { PackageFile, ReadPackageJSON } from "./PackageReader.js";
+import {
+  GetHighestVersion,
+  IParsedPackageNameResults,
+  ParsePackageName,
+  ReadPackageJSON,
+  SemVersionSymbol,
+} from "./PackageReader.js";
+import LogTree from "console-log-tree";
 
+/**
+ * Default lpm directory path
+ */
 const LPM_DIR = path.join(os.homedir(), ".local-package-manager");
 
 interface ITempFolderObject {
@@ -27,6 +38,9 @@ export async function CreateTemporaryFolder(): Promise<ITempFolderObject> {
   };
 }
 
+/**
+ * Creates LPM package directory based off the package name, removes it if it previously existed then adds new
+ */
 export async function CreateLPMPackageDirectory(
   PackageName: string
 ): Promise<string> {
@@ -54,6 +68,9 @@ export async function CreateLPMPackageDirectory(
   return dir;
 }
 
+/**
+ * Remove from lpm packages directory
+ */
 export async function RemoveLPMPackageDirectory(
   PackageName: string
 ): Promise<boolean> {
@@ -70,6 +87,9 @@ export async function RemoveLPMPackageDirectory(
   return false;
 }
 
+/**
+ * Get the LPM packages directory.
+ */
 export async function GetLPMPackagesDirectory(): Promise<string> {
   const d = await GetLPMDirectory().catch((e) => {
     logreport.error(e);
@@ -88,9 +108,11 @@ export async function GetLPMPackagesDirectory(): Promise<string> {
     logreport.error(e);
   }
   return LPM_PACKAGES_DIR;
-  //   const dir = await GetLPM_DIRectory();
 }
 
+/**
+ * Gets the LPM directory
+ */
 export async function GetLPMDirectory(): Promise<string> {
   try {
     const LPM_DIRExists = fs.existsSync(LPM_DIR);
@@ -105,19 +127,20 @@ export async function GetLPMDirectory(): Promise<string> {
   return LPM_DIR;
 }
 
+/**
+ * Returns the path of the LPM Packages JSON file, Creates it if it doesn't exist.
+ */
 export async function GetLPMPackagesJSON(): Promise<string> {
   const PackagesJSONPath = path.join(await GetLPMDirectory(), "pkgs.json");
   try {
     const LPM_PACKAGES_JSON_Exists = fs.existsSync(PackagesJSONPath);
     if (!LPM_PACKAGES_JSON_Exists) {
+      const default_data: ILPMPackagesJSON = {
+        packages: {},
+        version_tree: {},
+      };
       await fs.promises
-        .writeFile(
-          PackagesJSONPath,
-          JSON.stringify({
-            packages: {},
-          }),
-          "utf8"
-        )
+        .writeFile(PackagesJSONPath, JSON.stringify(default_data), "utf8")
         .catch((e) => {
           logreport.error(e);
         });
@@ -128,8 +151,89 @@ export async function GetLPMPackagesJSON(): Promise<string> {
   return PackagesJSONPath;
 }
 
-const CorruptedGlobalRegistryJSONFileWarn = `Possibly corrupted global registry file. You can revert to a previous backed up version or manually try to fix the JSON file if you know what you're doing!\n\nRun 'lpm backup revert' to get to the backup wizard.\nRun 'lpm open json' to open json file.`;
+/**
+ * Gets the published version from a directory
+ */
+export async function ResolvePackageFromLPMJSONFromDirectory(
+  Directory: string,
+  useReadLPM?: ILPMPackagesJSON,
+  keepCurrentVersion?: boolean
+): Promise<
+  | { Package: ILPMPackagesJSON_Package; Parsed: IParsedPackageNameResults }
+  | undefined
+> {
+  const PackageJSON = await ReadPackageJSON(Directory);
+  if (!PackageJSON.success || typeof PackageJSON.result === "string") {
+    return undefined;
+  }
+  if (!PackageJSON.result.name) {
+    return undefined;
+  }
+  if (!PackageJSON.result.version) {
+    return undefined;
+  }
+  return await ResolvePackageFromLPMJSON(
+    PackageJSON.result.name + "@" + PackageJSON.result.version,
+    useReadLPM,
+    keepCurrentVersion
+  );
+}
 
+/**
+ * Resolves the package based off its name, checks in the version tree first then within the packages dictionary.
+ * @param keepCurrentVersion if a version like @^1.4.5 is a passed and 1.4.6 exists, it will use 1.4.6, to only use 1.4.5, pass this argument.
+ */
+export async function ResolvePackageFromLPMJSON(
+  PackageName: string,
+  useReadLPM?: ILPMPackagesJSON,
+  keepCurrentVersion?: boolean
+): Promise<
+  | { Package: ILPMPackagesJSON_Package; Parsed: IParsedPackageNameResults }
+  | undefined
+> {
+  const LPMPackagesJSON = useReadLPM || (await ReadLPMPackagesJSON());
+  let Parsed = ParsePackageName(PackageName);
+  const INFO = LPMPackagesJSON.version_tree[Parsed.FullPackageName];
+  if (!INFO) {
+    logreport.warn(
+      `"${PackageName}" => "${Parsed.FullPackageName}" was not found in the version tree.`
+    );
+    return undefined;
+  }
+
+  let HighestVersion: string | null;
+  if (keepCurrentVersion) {
+    HighestVersion = Parsed.PackageVersion;
+  } else {
+    HighestVersion = await GetHighestVersion(INFO, Parsed.VersionWithSymbol);
+  }
+
+  if (!HighestVersion) {
+    logreport.warn(
+      `"${PackageName}" => "${Parsed.FullPackageName}" Could not resolve latest version from version tree.`
+    );
+    return undefined;
+  }
+  //If the currently parsed version is not the highest version, the change parse to use higher version.
+  if (Parsed.PackageVersion !== HighestVersion) {
+    Parsed = ParsePackageName(
+      `${Parsed.FullPackageName}@${Parsed.SemVersionSymbol}${HighestVersion}`
+    );
+  }
+  const TargetPackage =
+    LPMPackagesJSON.packages[
+      Parsed.FullPackageName + "@" + Parsed.PackageVersion
+    ];
+  if (!TargetPackage) {
+    return;
+  }
+  return { Package: TargetPackage, Parsed };
+}
+
+const CorruptedGlobalRegistryJSONFileWarn = `Possibly corrupted global registry file. You can revert to a previous backed up version or manually try to fix the JSON file if you know what you're doing!\n\nRun 'lpm backup revert' to get to the backup wizard.\nRun 'lpm open json' to open json file.`;
+/**
+ * Reads the LPM Packages json file, if it doesn't exists then it will create it.
+ */
 export async function ReadLPMPackagesJSON(): Promise<ILPMPackagesJSON> {
   try {
     const LPMPackagesJSON = await GetLPMPackagesJSON();
@@ -146,8 +250,11 @@ export async function ReadLPMPackagesJSON(): Promise<ILPMPackagesJSON> {
   return {} as ILPMPackagesJSON;
 }
 
+/**
+ * Writes the LPM Packages json file, if it doesn't exists then it will create it.
+ */
 export async function WriteLPMPackagesJSON(
-  Data: string | object,
+  Data: string | ILPMPackagesJSON,
   options?: BufferEncoding
 ): Promise<boolean> {
   logreport.assert(
@@ -155,7 +262,7 @@ export async function WriteLPMPackagesJSON(
     "Did not get any data to write to LPM Packages JSON."
   );
   if (typeof Data === "object") {
-    Data = JSON.stringify(Data, null, 2);
+    Data = JSON.stringify(Data, null, 1);
   }
   let wrote = false;
   try {
@@ -165,50 +272,133 @@ export async function WriteLPMPackagesJSON(
       Data,
       options || { encoding: "utf8" }
     );
+    wrote = true;
   } catch (e) {
+    logreport.warn(e);
     wrote = false;
   }
   return wrote;
 }
 
+/**
+ * Different possible types of installations.
+ */
 export type ILPMPackagesJSON_Package_installations_installtypes =
   | "default"
   | "import";
 
+/**
+ * Data about an installed package. used within published package -> installation -> installation & packages lock pkgs -> package.
+ */
+export type ILPMPackagesJSON_Package_installation = {
+  path: string;
+  install_type: ILPMPackagesJSON_Package_installations_installtypes;
+  sem_ver_symbol: SemVersionSymbol;
+  dependency_scope: dependency_scope;
+  traverse_imports: boolean;
+};
+
+/**
+ * Information about a published package inside the pkgs json.
+ */
 export type ILPMPackagesJSON_Package = {
   resolve: string;
-  installations: {
-    path: string;
-    install_type: ILPMPackagesJSON_Package_installations_installtypes;
-  }[];
+  installations: ILPMPackagesJSON_Package_installation[];
   publish_sig: string;
+  publish_directory: string;
   requires_import?: boolean;
 };
+
+/**
+ * The read interface of the LPM pkgs file.
+ */
 export interface ILPMPackagesJSON {
   packages: { [key: string]: ILPMPackagesJSON_Package };
+  version_tree: { [key: string]: string[] | undefined };
 }
 
+/**
+ * Adds the given packaes to the lpm pkgs file. Handling duplications etc.
+ */
 export async function AddPackagesToLPMJSON(
   Packages: {
     name: string;
+    version: string;
     resolve: string;
     publish_signature: string;
+    publish_directory: string;
     requires_import?: boolean;
   }[]
 ): Promise<boolean> {
   logreport.assert(typeof Packages === "object", "Invalid Packages passed.");
   try {
     const LPMPackagesJSON = await ReadLPMPackagesJSON();
-    Packages.forEach(async (pkg) => {
-      const ExistingPkgData = LPMPackagesJSON.packages[pkg.name];
+    for (const pkg of Packages) {
+      const Parsed = ParsePackageName(pkg.name, pkg.version);
+      const ExistingPkgData = LPMPackagesJSON.packages[Parsed.FullResolvedName];
       const NewData: ILPMPackagesJSON_Package = {
         resolve: pkg.resolve,
         installations: (ExistingPkgData && ExistingPkgData.installations) || [],
         publish_sig: pkg.publish_signature,
         requires_import: pkg.requires_import,
+        publish_directory: pkg.publish_directory,
       };
-      LPMPackagesJSON.packages[pkg.name] = NewData;
-    });
+      LPMPackagesJSON.version_tree[Parsed.FullPackageName] = [
+        ...new Set([
+          ...(LPMPackagesJSON.version_tree[Parsed.FullPackageName] || []),
+          pkg.version,
+        ]),
+      ];
+      LPMPackagesJSON.packages[Parsed.FullResolvedName] = NewData;
+    }
+    const wrote = await WriteLPMPackagesJSON(LPMPackagesJSON);
+    if (!wrote) {
+      logreport("Failed to write to LPM Packages.", "error");
+    }
+  } catch (e) {
+    logreport.error(e);
+  }
+  return true;
+}
+
+/**
+ * Removes the packages from the lpm pkgs json file. also removes from version tree.
+ */
+export async function RemovePackagesFromLPMJSON(
+  Packages: { name: string; version: string }[]
+): Promise<boolean> {
+  logreport.assert(typeof Packages === "object", "Invalid Packages passed.");
+  try {
+    const LPMPackagesJSON = await ReadLPMPackagesJSON();
+    for (const pkg of Packages) {
+      const ParsedInfo = ParsePackageName(pkg.name, pkg.version);
+      const PublishInfo = await ResolvePackageFromLPMJSON(
+        ParsedInfo.FullResolvedName,
+        LPMPackagesJSON
+      );
+      if (PublishInfo) {
+        delete LPMPackagesJSON.packages[ParsedInfo.FullResolvedName];
+        const inVersion =
+          LPMPackagesJSON.version_tree[ParsedInfo.FullPackageName];
+        if (inVersion) {
+          const rmv = inVersion.filter((x) => x !== ParsedInfo.PackageVersion);
+          if (rmv.length === 0) {
+            LPMPackagesJSON.version_tree[ParsedInfo.FullPackageName] =
+              undefined;
+          } else {
+            LPMPackagesJSON.version_tree[ParsedInfo.FullPackageName] = rmv;
+          }
+        }
+      } else {
+        logreport(
+          `${ParsedInfo.FullResolvedName} is not published.`,
+          "warn",
+          true
+        );
+      }
+      /*
+       */
+    }
     const wrote = WriteLPMPackagesJSON(LPMPackagesJSON);
     if (!wrote) {
       logreport("Failed to write to LPM Packages.", "error");
@@ -219,58 +409,114 @@ export async function AddPackagesToLPMJSON(
   return true;
 }
 
-export async function RemovePackagesFromLPMJSON(
-  Packages: string[]
-): Promise<boolean> {
-  logreport.assert(typeof Packages === "object", "Invalid Packages passed.");
-  try {
-    const LPMPackagesJSON = await ReadLPMPackagesJSON();
-    Packages.forEach(async (pkg) => {
-      if (LPMPackagesJSON.packages[pkg]) {
-        delete LPMPackagesJSON.packages[pkg];
-      } else {
-        logreport(`${pkg} was not published.`, "warn", true);
-      }
-    });
-    const wrote = WriteLPMPackagesJSON(LPMPackagesJSON);
-    if (!wrote) {
-      logreport("Failed to write to LPM Packages.", "error");
-    }
-  } catch (e) {
-    logreport.error(e);
-  }
-  return true;
+/**
+ * Interface for adding an installation to a published package.
+ */
+export interface IAddInstallationsToGlobalPackage_Package {
+  packageName: string;
+  installInfo: Omit<ILPMPackagesJSON_Package_installation, "sem_ver_symbol">;
 }
+/**
+ * Adds the packages as installations of the the target package, handling duplications etc.
+ * If `@latest` is provided as the version of a target package, it will fetch the latest version of the package and use that.
+ */
 export async function AddInstallationsToGlobalPackage(
-  packageNames: string[],
-  Installations: ILPMPackagesJSON_Package["installations"]
+  Packages: IAddInstallationsToGlobalPackage_Package[]
 ) {
   const LPMPackagesJSON = await ReadLPMPackagesJSON();
-  packageNames.forEach((packageName) => {
-    const TargetPackage = LPMPackagesJSON.packages[packageName];
+  const LinkedUpdateInfo: string[] = [];
+  for (const Package of Packages) {
+    let ParsedInfo = ParsePackageName(Package.packageName);
+    if (ParsedInfo.PackageVersion === "latest") {
+      const PublishedVersions =
+        LPMPackagesJSON.version_tree[ParsedInfo.FullPackageName];
+      if (!PublishedVersions) {
+        logreport.error(
+          `${ParsedInfo.FullResolvedName} could not resolve a version from @latest. Make sure the package is published.`
+        );
+        process.exit(1);
+      }
+
+      const HighestVersion = await GetHighestVersion(PublishedVersions);
+      if (HighestVersion === null) {
+        logreport.error(
+          `${ParsedInfo.FullResolvedName} could not resolve a version from @latest. The package seemed to be published incorrectly.`
+        );
+        process.exit(1);
+      }
+      ParsedInfo = ParsePackageName(
+        ParsedInfo.FullPackageName,
+        ParsedInfo.SemVersionSymbol + HighestVersion
+      );
+    }
+    const TargetPackage = LPMPackagesJSON.packages[ParsedInfo.FullResolvedName];
     if (!TargetPackage) {
       logreport.error(
-        `${packageName} was not found in the local package registry.`
+        `${ParsedInfo.FullResolvedName} was not found in the local package registry.`
       );
     }
     let OldInstallationData = TargetPackage.installations;
     if (!OldInstallationData) {
       logreport(
-        `No Installations was found on package ${packageName}. Check backups to find previous installations of this package.`,
+        `No Installations was found on package ${ParsedInfo.FullResolvedName}. Check backups to find previous installations of this package.`,
         "warn"
       );
       OldInstallationData = [];
     }
-    //filter so paths are unique and not duplicated
-    const t = [...OldInstallationData, ...Installations];
+    const PublishedVersionsOfPkg =
+      LPMPackagesJSON.version_tree[ParsedInfo.FullPackageName];
+
+    //check if it was installed previously with a different version. if so, remove it.
+    if (PublishedVersionsOfPkg) {
+      for (const version of PublishedVersionsOfPkg) {
+        if (version === ParsedInfo.PackageVersion) {
+          continue;
+        }
+        const tpub =
+          LPMPackagesJSON.packages[ParsedInfo.FullPackageName + "@" + version];
+        if (tpub) {
+          LPMPackagesJSON.packages[
+            ParsedInfo.FullPackageName + "@" + version
+          ].installations = tpub.installations.filter(
+            (x) => x.path !== Package.installInfo.path
+          );
+        }
+      }
+    }
+    const AddInstallationData: ILPMPackagesJSON_Package_installation = {
+      install_type: Package.installInfo.install_type,
+      path: Package.installInfo.path,
+      sem_ver_symbol: ParsedInfo.SemVersionSymbol,
+      dependency_scope: Package.installInfo.dependency_scope,
+      traverse_imports: (Package.installInfo.traverse_imports ||
+        undefined) as boolean, //if traverse_imports is false, save it as undefined.
+    };
+    LinkedUpdateInfo.push(
+      `${ParsedInfo.FullSemVerResolvedName} as ${
+        Package.installInfo.install_type
+      } ${pluralize(Package.installInfo.dependency_scope, 1)}`
+    );
+    // filter so paths are unique and not duplicated
+    const t = [...OldInstallationData, ...[AddInstallationData]];
     const paths = t.map(({ path }) => path);
     TargetPackage.installations = t.filter(
       ({ path }, index) => !paths.includes(path, index + 1)
     );
-  });
+  }
+  console.log(
+    LogTree.parse(
+      LinkedUpdateInfo.map((x) => {
+        return { name: x };
+      })
+    )
+  );
+  // logreport(`\n\t${LinkedUpdateInfo.join("\n\t")}`, "log", true);
   await WriteLPMPackagesJSON(LPMPackagesJSON);
 }
 
+/**
+ * Removes the given installations from the given packages.
+ */
 export async function RemoveInstallationsFromGlobalPackage(
   packageNames: string[],
   Installations: string[]
@@ -294,27 +540,39 @@ export async function RemoveInstallationsFromGlobalPackage(
   await WriteLPMPackagesJSON(LPMPackagesJSON);
 }
 
-//LOCK
-export type LOCKFILEPKG = {
-  resolve: string;
-  publish_sig: string;
-  dependencyScope?:
-    | "peerDependencies"
-    | "devDependencies"
-    | "optionalDependencies"
-    | "dependencies";
-  install_type: ILPMPackagesJSON_Package_installations_installtypes;
-};
+/**
+ * Possible dependency scopes a package can have
+ */
+export type dependency_scope =
+  | "peerDependencies"
+  | "devDependencies"
+  | "optionalDependencies"
+  | "dependencies";
+
+/**
+ * Refers to a package inside a lock file.pkgs.
+ */
+export type LOCKFILEPKG = Omit<ILPMPackagesJSON_Package_installation, "path"> &
+  Pick<ILPMPackagesJSON_Package, "publish_sig" | "requires_import"> & {
+    resolve: string;
+  };
+
+/**
+ * The read version of a LOCK file.
+ */
 interface LOCKFILE {
   pkgs: { [key: string]: LOCKFILEPKG };
 }
 
+/**
+ * Checks for a `lpm.lock` file in the given directory, if no directory is provided, will default to cwd.
+ */
 export async function ReadLockFileFromCwd(
   cwd?: string,
   warnNoExist?: boolean,
   noLogs?: boolean
 ): Promise<LOCKFILE> {
-  cwd = cwd || ".";
+  cwd = cwd || process.cwd();
   try {
     if (!fs.existsSync(path.join(cwd, "lpm.lock"))) {
       if (noLogs) {
@@ -336,6 +594,9 @@ export async function ReadLockFileFromCwd(
   return {} as LOCKFILE;
 }
 
+/**
+ * Creates a lock file at the given working directory.
+ */
 export async function AddLockFileToCwd(cwd?: string, data?: unknown) {
   cwd = cwd || process.cwd();
   try {
@@ -357,31 +618,32 @@ export async function AddLockFileToCwd(cwd?: string, data?: unknown) {
   }
 }
 
-function GetPackageDependencyScope(
-  Package: string,
-  TargetPackageJSON: PackageFile
-): LOCKFILEPKG["dependencyScope"] {
-  //dependency
-  if (
-    TargetPackageJSON.dependencies &&
-    TargetPackageJSON.dependencies[Package]
-  ) {
-    return "dependencies";
+/**
+ * Gets the package info by the name from the LOCK file.
+ */
+export async function GetPackageFromLockFileByName(
+  Name: string,
+  cwd: string,
+  useLockFile?: LOCKFILE
+): Promise<LOCKFILEPKG | undefined> {
+  const LOCK = useLockFile || (await ReadLockFileFromCwd(cwd));
+  for (const x in LOCK.pkgs) {
+    const parsed = ParsePackageName(x);
+    if (
+      parsed.FullPackageName === Name ||
+      parsed.FullResolvedName === Name ||
+      parsed.FullSemVerResolvedName === Name
+    ) {
+      return LOCK.pkgs[x];
+    }
   }
-  //devDependency
-  if (
-    TargetPackageJSON.devDependencies &&
-    TargetPackageJSON.devDependencies[Package]
-  ) {
-    return "devDependencies";
-  }
-  return "dependencies";
 }
 
-export type RequireFileChangeGenerateObj = {
+/**
+ * When generating LOCK file, files that should be updated,install,uninstalled are returned as this type.
+ */
+export type RequireFileChangeGenerateObj = LOCKFILEPKG & {
   name: string;
-  data: ILPMPackagesJSON_Package;
-  install_type: ILPMPackagesJSON_Package_installations_installtypes;
 };
 /**
  * Returns packages that should be installed/uninstall based on the new lock file.
@@ -389,25 +651,20 @@ export type RequireFileChangeGenerateObj = {
  */
 export async function GenerateLockFileAtCwd(cwd?: string): Promise<{
   RequiresInstall: RequireFileChangeGenerateObj[];
-  RequiresUninstall: RequireFileChangeGenerateObj[];
+  // RequiresUninstall: RequireFileChangeGenerateObj[];
   RequiresNode_Modules_Injection: RequireFileChangeGenerateObj[];
 }> {
-  const RequiresInstall: RequireFileChangeGenerateObj[] = [];
-  const RequiresUninstall: RequireFileChangeGenerateObj[] = [];
-  const RequiresNode_Modules_Injection: RequireFileChangeGenerateObj[] = [];
+  let RequiresInstall: RequireFileChangeGenerateObj[] = [];
+  // const RequiresUninstall: RequireFileChangeGenerateObj[] = [];
+  let RequiresNode_Modules_Injection: RequireFileChangeGenerateObj[] = [];
   cwd = cwd || process.cwd();
   await AddLockFileToCwd(cwd);
   try {
-    const PreviousLockfileData: LOCKFILE = JSON.parse(
-      fs.readFileSync(path.join(cwd, "lpm.lock")).toString()
-    );
-
-    const CWDPackageJSON = await ReadPackageJSON(cwd);
+    const PreviousLockfileData = await ReadLockFileFromCwd(cwd, true, true);
     const LPMPackagesJSON = await ReadLPMPackagesJSON();
     const LOCK: LOCKFILE = {
       pkgs: {},
     };
-    // const bindir = path.join(cwd, "node_modules", ".bin");
     for (const Package in LPMPackagesJSON.packages) {
       const PreviousInLock =
         (PreviousLockfileData.pkgs && PreviousLockfileData.pkgs[Package]) || {};
@@ -415,23 +672,35 @@ export async function GenerateLockFileAtCwd(cwd?: string): Promise<{
       PackageData.installations.forEach(async (installation) => {
         if (installation.path === cwd) {
           if (!LOCK.pkgs[Package]) {
-            //a new publish was made but installed version has old/uknown signature. so request update
+            // new lock data, and if anything specific needs to be changed push to desired array, inject/install
+            const f: RequireFileChangeGenerateObj = {
+              name: Package,
+              resolve: PackageData.resolve,
+              publish_sig: PackageData.publish_sig,
+              requires_import: PackageData.requires_import,
+              install_type: installation.install_type,
+              sem_ver_symbol: installation.sem_ver_symbol,
+              traverse_imports: installation.traverse_imports,
+              dependency_scope: installation.dependency_scope,
+            };
+            // the install_type changed. e.g from default => import
+            if (PreviousInLock.install_type !== installation.install_type) {
+              RequiresNode_Modules_Injection.push(f);
+            }
+            // the dependency_scope change. e.g from dependencies => devDependencies
             if (
-              // PreviousInLock.publish_sig !== undefined &&
-              PackageData.publish_sig !== PreviousInLock.publish_sig
+              PreviousInLock.dependency_scope !== installation.dependency_scope
             ) {
-              const f = {
-                name: Package,
-                data: PackageData,
-                install_type: installation.install_type,
-              };
+              RequiresInstall.push(f);
+            }
+            //a new publish was made but installed version has old/uknown signature. so request update
+            if (PackageData.publish_sig !== PreviousInLock.publish_sig) {
               if (PreviousInLock.publish_sig !== undefined) {
                 const lockpsigsplit = PreviousInLock.publish_sig.split("-");
                 const pubsigsplit = PackageData.publish_sig.split("-");
                 const IS_SAME_PACKAGE_JSON =
                   lockpsigsplit[1] === pubsigsplit[1];
                 if (IS_SAME_PACKAGE_JSON) {
-                  // RequiresInstall.push(f);
                   RequiresNode_Modules_Injection.push(f); //If the package.json remains the same, just inject the module into node_modules instead of updating with package manager.
                 } else {
                   RequiresInstall.push(f);
@@ -440,110 +709,44 @@ export async function GenerateLockFileAtCwd(cwd?: string): Promise<{
                 RequiresInstall.push(f);
               }
             }
-
-            LOCK.pkgs[Package] = {
-              resolve: PackageData.resolve,
-              publish_sig: PackageData.publish_sig,
-              install_type: installation.install_type,
-              // pm: PreviousInLock.pm || undefined,
-            };
-
-            //setting the dependency scope (dependency, devDependency, peerDependency, etc...)
-            if (
-              CWDPackageJSON.success &&
-              CWDPackageJSON.result !== undefined &&
-              typeof CWDPackageJSON.result !== "string"
-            ) {
-              LOCK.pkgs[Package].dependencyScope = GetPackageDependencyScope(
-                Package,
-                CWDPackageJSON.result
-              );
-            }
-
-            //updating .bin files to use relative paths and not symlink paths.
-            /* disabled since the introduction of lpx.
-            try {
-              const Read = await ReadPackageJSON(PackageData.resolve);
-              if (!Read.success) {
-                logreport.warn("No package.json file exist. => " + Read.result);
-                return;
-              }
-              if (typeof Read.result === "string") {
-                logreport.warn("something went wrong");
-                return;
-              }
-              const UpdateBins = new Map<string, string>();
-              if (Read.result.bin) {
-                for (const binName in Read.result.bin) {
-                  const binSource = Read.result.bin[binName];
-                  UpdateBins.set(binName, binSource);
-                }
-              }
-              if (UpdateBins.size > 0) {
-                UpdateBins.forEach((binSource, binName) => {
-                  // const BinFilePath = path.join(bindir, binName);
-
-                  //for /.bin/binName.cmd
-                  const BinCMDPath = path.join(bindir, binName + ".cmd");
-                  if (fs.existsSync(BinCMDPath)) {
-                    const Source = fs.readFileSync(BinCMDPath, "utf8");
-                    //path in cwd (node_modules/...)
-                    const ExecutableSourceFileInNodeModules =
-                      "\\" +
-                      path.relative(
-                        bindir,
-                        path.join("node_modules", Package, binSource)
-                      );
-                    //path in .lpm global directory
-                    const BinSourceFileRelativeToNodeModulesBin =
-                      "\\" +
-                      path.relative(
-                        bindir,
-                        path.join(PackageData.resolve, binSource)
-                      );
-                    const SEARCH_NODE_EXE_IF = `"%~dp0\\node.exe"  "%~dp0${BinSourceFileRelativeToNodeModulesBin}" %*`;
-                    const REPLACE_NODE_EXE_IF = `"%~dp0\\node.exe --preserve-symlinks --preserve-symlinks-main "  "%~dp0${ExecutableSourceFileInNodeModules}" %*`;
-                    const SEARCH_NODE_EXE_ELSE = `node  "%~dp0${BinSourceFileRelativeToNodeModulesBin}" %*`;
-                    const REPLACE_NODE_EXE_ELSE = `node --preserve-symlinks --preserve-symlinks-main  "%~dp0${ExecutableSourceFileInNodeModules}" %*`;
-                    const newSource =
-                      "@REM This binary file was edited by LPM.\n@REM Some node flags were added to have local dependencies binaries be executed properly.\n@REM To report any problems or get support: https://github.com/mekstuff/lpm\n\n" +
-                      Source.replace(
-                        SEARCH_NODE_EXE_IF,
-                        REPLACE_NODE_EXE_IF
-                      ).replace(SEARCH_NODE_EXE_ELSE, REPLACE_NODE_EXE_ELSE);
-
-                    fs.writeFileSync(BinCMDPath, newSource, "utf8");
-                  }
-                });
-              }
-            } catch (err) {
-              logreport.warn("Could not update .bin files => " + err);
-            }
-            */
+            LOCK.pkgs[Package] = f;
           }
         }
       });
-      /*
-      //updating .bin files to use relative paths and not symlink paths.
-      try {
-        const bindir = path.join(cwd, "node_modules", ".bin");
-        if (fs.existsSync(bindir)) {
-          for (const pkg in LOCK.pkgs) {
-            console.log(pkg);
-          }
-        }
-      } catch (e) {
-        logreport.error("Failed to edit .bin files " + e);
-      }
-      */
     }
     await AddLockFileToCwd(cwd, LOCK);
   } catch (e) {
     logreport.error("Failed to generate lock file " + e);
   }
+
+  function FilterRequireDuplicates(Target: RequireFileChangeGenerateObj[]) {
+    const t = [...Target];
+    const _requiresInjection = t.map(({ name, resolve }) => name + resolve);
+    return (Target = t.filter(
+      ({ name, resolve }, index) =>
+        !_requiresInjection.includes(name + resolve, index + 1)
+    ));
+  }
+
+  //remove duplications.
+  RequiresNode_Modules_Injection = FilterRequireDuplicates(
+    RequiresNode_Modules_Injection
+  );
+  RequiresInstall = FilterRequireDuplicates(RequiresInstall);
+
+  //Anything that requires install, remove if from requires injection.
+  RequiresNode_Modules_Injection = RequiresNode_Modules_Injection.filter(
+    (x) => {
+      return (
+        RequiresInstall.findIndex(
+          (tx) => tx.name === x.name && tx.resolve === x.resolve
+        ) === -1
+      );
+    }
+  );
+
   return {
     RequiresInstall: RequiresInstall,
-    RequiresUninstall: RequiresUninstall,
     RequiresNode_Modules_Injection: RequiresNode_Modules_Injection,
   };
 }

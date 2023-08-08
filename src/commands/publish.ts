@@ -3,7 +3,7 @@ import tar from "tar";
 import logreport from "../utils/logreport.js";
 import { program as CommanderProgram } from "commander";
 import pack from "./pack.js";
-import { ReadPackageJSON } from "../utils/PackageReader.js";
+import { ParsePackageName, ReadPackageJSON } from "../utils/PackageReader.js";
 import {
   AddPackagesToLPMJSON,
   CreateLPMPackageDirectory,
@@ -27,7 +27,7 @@ export default class publish extends pack {
     Options: PublishOptions
   ): Promise<string | void> {
     await BackUpLPMPackagesJSON();
-    packagePath = packagePath || ".";
+    packagePath = packagePath || process.cwd();
     const { success, result } = await ReadPackageJSON(packagePath);
     if (!success) {
       logreport.error(result);
@@ -40,8 +40,12 @@ export default class publish extends pack {
     if (!result.name) {
       return logreport.error("Package must have a name to publish.");
     }
+    if (!result.version) {
+      return logreport.error("Package must have a version to publish.");
+    }
+    const ParsedInfo = ParsePackageName(result.name, result.version);
     const LPMPackagesJSON = await ReadLPMPackagesJSON();
-    const OLDVERSION = LPMPackagesJSON.packages[result.name];
+    const OLDVERSION = LPMPackagesJSON.packages[ParsedInfo.FullResolvedName];
     if (
       OLDVERSION &&
       OLDVERSION.requires_import === true &&
@@ -50,7 +54,7 @@ export default class publish extends pack {
       await prompt<{ select: "yes" | "no" }>({
         name: "select",
         type: "select",
-        message: `"${result.name}" was previously published with requires-import, You are currently publishing without it set. Should we set the flag?`,
+        message: `"${ParsedInfo.FullPackageName}" was previously published with requires-import, You are currently publishing without it set. Should we set the flag?`,
         choices: ["yes", "no"],
       })
         .then((res) => {
@@ -63,10 +67,7 @@ export default class publish extends pack {
           process.exit(1);
         });
     }
-    logreport.Elapse(
-      `Publishing ${result?.name} ${result?.version}`,
-      "PUBLISH"
-    );
+    logreport.Elapse(`Publishing ${ParsedInfo.FullResolvedName}`, "PUBLISH");
     if (result.scripts) {
       if (Options.scripts) {
         const PrePublishOnlyScript = result.scripts["prepublishOnly"];
@@ -83,16 +84,26 @@ export default class publish extends pack {
         // );
       }
     }
-    const packageinlpmdir = await CreateLPMPackageDirectory(result.name);
 
-    const packRes = await this.Pack(packagePath, {
-      out: path.join(
-        await GetLPMPackagesDirectory(),
-        result.name,
-        "tarbal.tgz"
-      ),
-      scripts: Options.scripts,
-    }).catch((err) => {
+    const PackageOutputPath = path.join(
+      ParsedInfo.FullPackageName,
+      ParsedInfo.PackageVersion
+    );
+    const packageinlpmdir = await CreateLPMPackageDirectory(PackageOutputPath);
+
+    //package and ignore the .lpm directory for imports
+    const packRes = await this.Pack(
+      packagePath,
+      {
+        out: path.join(
+          await GetLPMPackagesDirectory(),
+          PackageOutputPath,
+          "tarbal.tgz"
+        ),
+        scripts: Options.scripts,
+      },
+      [".lpm"]
+    ).catch((err) => {
       console.error(err);
       logreport.error("Failed to pack. " + err);
     });
@@ -104,15 +115,17 @@ export default class publish extends pack {
 
     await AddPackagesToLPMJSON([
       {
-        name: result.name,
+        name: ParsedInfo.FullPackageName,
+        version: result.version,
         resolve: path.join(packageinlpmdir, "pkg"),
         publish_signature: packRes.pack_signature,
         requires_import: Options.requiresImport ? true : undefined,
+        publish_directory: packagePath,
       },
     ]).then((added) => {
       if (!added) {
         logreport(
-          `Could not add package to global json file! ${result.name} => ${packageinlpmdir}`
+          `Could not add package to global json file! ${ParsedInfo.FullResolvedName} => ${packageinlpmdir}`
         );
       }
     });
@@ -127,16 +140,8 @@ export default class publish extends pack {
       console.log(err);
       logreport.error("Failed to publish " + err);
     }
-
     logreport.EndElapse("PUBLISH");
-
     return packRes.pack_signature;
-
-    /*
-    if (Options.push) {
-      await getcommand("push").Push(packagePath, {});
-    }
-    */
   }
   build(program: typeof CommanderProgram) {
     program

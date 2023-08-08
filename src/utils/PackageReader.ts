@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import logreport from "./logreport.js";
+import semver from "semver";
 
 interface PackageFileRequired {
   name: string;
@@ -15,15 +16,91 @@ interface PackageFileRequired {
 
 export type PackageFile = Partial<PackageFileRequired>;
 
-export async function ParsePackageName(Name: string): Promise<{
+const SemVersionSymbols = ["^", "~", "!"];
+export type SemVersionSymbol = (typeof SemVersionSymbols)[number];
+export interface IParsedPackageNameResults {
   PackageName: string;
   OrginizationName: string;
-}> {
+  PackageVersion: string;
+  FullPackageName: string;
+  FullResolvedName: string;
+  SemVersionSymbol: SemVersionSymbol;
+  FullSemVerResolvedName: string;
+  VersionWithSymbol: string;
+}
+
+const ParseCache = new Map<string, IParsedPackageNameResults>();
+
+export function ParsePackageName(
+  Name: string,
+  appendVersion?: string,
+  forceSemverSymbol?: SemVersionSymbol
+): IParsedPackageNameResults {
+  if (appendVersion) {
+    Name += "@" + appendVersion;
+  }
+  if (ParseCache.has(Name)) {
+    return ParseCache.get(Name) as IParsedPackageNameResults;
+  }
   const s = Name.split("/");
-  return {
-    OrginizationName: s[1] ? s[0] : "",
-    PackageName: s[1] ? s[1] : s[0],
+  let PackageName = s[1] ? s[1] : s[0];
+  const OrginizationName = s[1] ? s[0] : "";
+  const VersionSplit = PackageName.split("@");
+  let PackageVersion = "latest";
+  if (VersionSplit.length > 1) {
+    PackageVersion = VersionSplit[1];
+    PackageName = VersionSplit[0];
+  }
+  let SemVersionSymbol: SemVersionSymbol = forceSemverSymbol || "^";
+  const fVersionChar = PackageVersion.match(/[^s;]/);
+  if (fVersionChar) {
+    const x = fVersionChar[0];
+    const inx = SemVersionSymbols.indexOf(x);
+    if (inx !== -1) {
+      SemVersionSymbol = forceSemverSymbol || SemVersionSymbols[inx];
+      PackageVersion = PackageVersion.slice(1);
+    }
+  }
+  const FullPackageName =
+    OrginizationName !== ""
+      ? OrginizationName + "/" + PackageName
+      : PackageName;
+  const res: IParsedPackageNameResults = {
+    PackageName,
+    OrginizationName,
+    PackageVersion,
+    FullPackageName,
+    FullResolvedName: FullPackageName + "@" + PackageVersion,
+    FullSemVerResolvedName:
+      FullPackageName + "@" + SemVersionSymbol + PackageVersion,
+    SemVersionSymbol: SemVersionSymbol,
+    VersionWithSymbol: `${SemVersionSymbol}${PackageVersion}`,
   };
+  ParseCache.set(Name, res);
+  return res;
+}
+
+export async function ParseVersionString(
+  Version: string,
+  Options: semver.RangeOptions
+) {
+  return semver.parse(Version, Options);
+}
+
+export async function GetHighestVersion(
+  Versions: string[],
+  Version?: string,
+  Options?: semver.RangeOptions
+): Promise<string | null> {
+  Version = Version || "*";
+  const m = Version.match(/[^s;]/);
+  if (m !== null && m[0] === "!") {
+    return Version.slice(1);
+  }
+  if (Version === "latest" || Version.slice(1) === "latest") {
+    Version = "*";
+  }
+  return semver.maxSatisfying(Versions, Version, Options);
 }
 
 export async function ReadPackageJSON(

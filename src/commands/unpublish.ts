@@ -1,14 +1,13 @@
 import logreport from "../utils/logreport.js";
 import { program as CommanderProgram } from "commander";
 import pack from "./pack.js";
-import { ReadPackageJSON } from "../utils/PackageReader.js";
+import { ParsePackageName, ReadPackageJSON } from "../utils/PackageReader.js";
 import {
-  CreateLPMPackageDirectory,
   GetLPMPackagesDirectory,
-  ReadLPMPackagesJSON,
   RemoveLPMPackageDirectory,
   RemovePackagesFromLPMJSON,
 } from "../utils/lpmfiles.js";
+import path from "path";
 
 export default class unpublish extends pack {
   async Unpublish(packagePath: string | undefined) {
@@ -23,25 +22,39 @@ export default class unpublish extends pack {
     if (!result.name) {
       return logreport.error("Package must have a name to unpublish.");
     }
+    if (!result.version) {
+      return logreport.error("Package must have a version to unpublish.");
+    }
+    const ParsedInfo = ParsePackageName(result.name, result.version);
+
     logreport.Elapse(
-      `Unpublishing ${result?.name} ${result?.version}`,
+      `Unpublishing ${ParsedInfo.FullResolvedName}`,
       "UNPUBLISH"
     );
-    const packageinlpmdir = await CreateLPMPackageDirectory(result.name); //remove...
-    await RemovePackagesFromLPMJSON([result.name]).then((removed) => {
+    const PackageOutputPath = path.join(
+      ParsedInfo.FullPackageName,
+      ParsedInfo.PackageVersion
+    );
+
+    await RemovePackagesFromLPMJSON([
+      { name: ParsedInfo.FullPackageName, version: ParsedInfo.PackageVersion },
+    ]).then((removed) => {
       if (!removed) {
         logreport(
-          `Could not remove package to global json file! ${result.name} => ${packageinlpmdir}`
+          `Could not remove package to global json file! ${ParsedInfo.FullResolvedName} => ${PackageOutputPath}`
         );
       }
     });
     try {
-      const Removed = await RemoveLPMPackageDirectory(result.name);
+      const Removed = await RemoveLPMPackageDirectory(PackageOutputPath);
       if (!Removed) {
         logreport(
           `Failed to remove package file from global installation "${
-            result.name
-          }".\n\n You can manually delete it from here\n${await GetLPMPackagesDirectory()}`
+            ParsedInfo.FullResolvedName
+          }".\n\nYou can manually delete it from here\n${path.join(
+            await GetLPMPackagesDirectory(),
+            PackageOutputPath
+          )}`
         );
       }
     } catch (err) {
@@ -51,6 +64,7 @@ export default class unpublish extends pack {
     logreport.EndElapse("UNPUBLISH");
   }
 
+  /*
   async UnRegister(packages: string[]) {
     logreport.Elapse("Unregistering packages...", "UNREGISTER");
     const RegisteredPackages = await ReadLPMPackagesJSON();
@@ -71,6 +85,7 @@ export default class unpublish extends pack {
     });
     logreport.Elapse("Unregistered packages", "UNREGISTER", true);
   }
+  */
   build(program: typeof CommanderProgram) {
     program
       .command("unpublish [packagePath]")
@@ -78,12 +93,14 @@ export default class unpublish extends pack {
       .action(async (packagePath) => {
         this.Unpublish(packagePath);
       });
+    /*
     program
       .command("unregister <packages...>")
       .description("Unpublishes the given packages by their names.")
       .action(async (packages) => {
         this.UnRegister(packages);
       });
+      */
   }
   constructor() {
     super();

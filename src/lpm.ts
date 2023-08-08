@@ -7,7 +7,7 @@ import {
   ReadLockFileFromCwd,
   RequireFileChangeGenerateObj,
 } from "./utils/lpmfiles.js";
-import { AddOptions, GetPreferredPackageManager } from "./commands/add-link.js";
+import { AddOptions, GetPreferredPackageManager } from "./commands/add.js";
 import { AddFilesFromLockData } from "./commands/add.js";
 
 const program = new Command();
@@ -36,11 +36,14 @@ program.action(async (Options: AddOptions) => {
   const pkgs = LockFile.pkgs;
   const ToCallInject: RequireFileChangeGenerateObj[] = [];
   const ToCallAdd: RequireFileChangeGenerateObj[] = [];
+  /*
   for (const Package in pkgs) {
     const d = {
       name: Package,
       data: LPMPackages.packages[Package],
       install_type: pkgs[Package].install_type,
+      dependency_scope: pkgs[Package].dependency_scope,
+      sem_ver_symbol: pkgs[Package].sem_ver_symbol,
     };
     if (pkgs[Package].install_type === "import") {
       ToCallInject.push(d);
@@ -55,6 +58,7 @@ program.action(async (Options: AddOptions) => {
     ToCallAdd,
     ToCallInject
   );
+  */
   /*
 
   if (ToCallInstall.length === 0) {

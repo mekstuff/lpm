@@ -1,5 +1,5 @@
 import * as add from "./add.js";
-import * as addlink from "./add-link.js";
+
 import * as remove from "./remove.js";
 import * as publish from "./publish.js";
 import * as unpublish from "./unpublish.js";
@@ -29,9 +29,10 @@ import * as _import from "./import.js";
 
 import * as outdated from "./outdated.js";
 
+import * as config from "./config.js";
+
 const commands = {
   add,
-  addlink,
   remove,
   publish,
   unpublish,
@@ -48,6 +49,7 @@ const commands = {
   runrelease,
   _import,
   outdated,
+  config,
 };
 
 export default commands;

@@ -1,15 +1,16 @@
 import chalk from "chalk";
 import { program as CommanderProgram } from "commander";
 import { SUPPORTED_PACKAGE_MANAGERS } from "../utils/CONSTANTS.js";
-import { GetPreferredPackageManager } from "./add-link.js";
+import { GetPreferredPackageManager } from "./add.js";
 import logreport from "../utils/logreport.js";
+import { exec } from "child_process";
+import { BulkRemovePackagesFromLocalCwdStore } from "./add.js";
+import { ParsePackageName } from "../utils/PackageReader.js";
 import {
   GenerateLockFileAtCwd,
   ReadLockFileFromCwd,
   RemoveInstallationsFromGlobalPackage,
 } from "../utils/lpmfiles.js";
-import { exec } from "child_process";
-import { BulkRemovePackagesFromLocalCwdStore } from "./add.js";
 
 interface RemoveOptions {
   packageManager?: SUPPORTED_PACKAGE_MANAGERS;
@@ -31,6 +32,8 @@ export default class remove {
     );
     const Packages: string[] = [];
     const PackageManagerFlags: string[] = [];
+    //seperate the uninstall string packages since we can't include a @version when uninstall.
+    const UNINSTALL_PKGS_STRBUILD: string[] = [];
     Arg0.forEach((arg) => {
       if (!arg.match("^-")) {
         Packages.push(arg);
@@ -42,23 +45,36 @@ export default class remove {
       `Removing ${Packages.length} package${Packages.length === 1 ? "" : "s"}.`,
       "REMOVE_PKGS"
     );
-    Packages.forEach(async (pkg, index) => {
+    for (const index in Packages) {
+      const pkg = Packages[index];
+      let ParsedInfo = ParsePackageName(pkg);
+      //if a specific version is listed, then we need to get the currently installed version.
+      if (ParsedInfo.PackageVersion === "latest") {
+        for (const f in LOCKFILE.pkgs) {
+          const parsed = ParsePackageName(f);
+          if (parsed.FullPackageName === ParsedInfo.FullPackageName) {
+            ParsedInfo = parsed;
+          }
+        }
+      }
       logreport.Elapse(
-        `Fetching package ${chalk.blue(pkg)} [${index + 1} / ${
-          Packages.length
-        }]...`,
+        `Fetching package ${chalk.blue(ParsedInfo.FullResolvedName)} [${
+          Number(index) + 1
+        } / ${Packages.length}]...`,
         "REMOVE_PKGS"
       );
       if (!Options.skipLockCheck) {
-        if (!LOCKFILE.pkgs[pkg]) {
+        if (!LOCKFILE.pkgs[ParsedInfo.FullResolvedName]) {
           logreport.error(
             pkg +
               " was not found in lock file. use `--skip-lock-check` to ignore this check."
           );
         }
       }
-    });
-
+      Packages[index] = ParsedInfo.FullResolvedName;
+      //Set to package name since we don't need version
+      UNINSTALL_PKGS_STRBUILD.push(ParsedInfo.FullPackageName);
+    }
     logreport.Elapse(`Removing from global installations...`, "REMOVE_PKGS");
     try {
       await RemoveInstallationsFromGlobalPackage(Packages, [process.cwd()]);
@@ -80,8 +96,9 @@ export default class remove {
     const execString =
       Options.packageManager +
       " remove " +
-      Packages.join(" ") +
+      UNINSTALL_PKGS_STRBUILD.join(" ") +
       PackageManagerFlags.join(" ");
+
     logreport(`Executing "${execString}"`, "VERBOSE");
     const p = new Promise<number | null>((resolve) => {
       const executed = exec(execString);
@@ -115,10 +132,10 @@ export default class remove {
       `Removed from package manager with exit code ${await p}`,
       "REMOVE_PKGS"
     );
-    await BulkRemovePackagesFromLocalCwdStore(process.cwd(), Packages, true);
     logreport.Elapse(`Generating LOCK file...`, "REMOVE_PKGS");
     await GenerateLockFileAtCwd();
     logreport.Elapse(`LOCK file Generated`, "REMOVE_PKGS", true);
+    await BulkRemovePackagesFromLocalCwdStore(process.cwd(), Packages, true);
   }
   build(program: typeof CommanderProgram) {
     program

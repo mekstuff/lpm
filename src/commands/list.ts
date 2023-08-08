@@ -2,13 +2,28 @@ import fs from "fs";
 import path from "path";
 import chalk from "chalk";
 import { program as CommanderProgram } from "commander";
-import { ReadLPMPackagesJSON, ReadLockFileFromCwd } from "../utils/lpmfiles.js";
+import {
+  ReadLPMPackagesJSON,
+  ReadLockFileFromCwd,
+  ResolvePackageFromLPMJSON,
+} from "../utils/lpmfiles.js";
 import LogTree, { Tree } from "console-log-tree";
-import { ReadPackageJSON } from "../utils/PackageReader.js";
+import {
+  GetHighestVersion,
+  ParsePackageName,
+  ReadPackageJSON,
+} from "../utils/PackageReader.js";
 
 interface ListOptions {
   all?: boolean;
   depth?: number;
+}
+
+function ShowDiffChalk(str: unknown, comparison: unknown) {
+  if (comparison) {
+    return chalk.green(str);
+  }
+  return chalk.yellow(str);
 }
 
 export default class list {
@@ -32,14 +47,41 @@ export default class list {
           continue;
         }
         const pkg = LockFile.pkgs[Package];
-        let SHOW_NAME = Package;
-        const PublishedInfo = LPMPackagesJSON.packages[Package];
+        const pkgNameParsed = ParsePackageName(
+          Package,
+          undefined,
+          pkg.sem_ver_symbol
+        );
+        const PublishedInfo = await ResolvePackageFromLPMJSON(
+          Package,
+          LPMPackagesJSON
+        );
+        let SHOW_NAME = pkgNameParsed.FullSemVerResolvedName;
         if (PublishedInfo) {
-          if (PublishedInfo.publish_sig === pkg.publish_sig) {
-            SHOW_NAME += ` | ${chalk.green(pkg.publish_sig)}`;
-          } else {
-            SHOW_NAME += ` | ${chalk.yellow(pkg.publish_sig)}`;
+          const OtherVersions =
+            LPMPackagesJSON.version_tree[PublishedInfo.Parsed.FullPackageName];
+          if (OtherVersions) {
+            const HighestFeatVersion = await GetHighestVersion(
+              OtherVersions,
+              pkgNameParsed.VersionWithSymbol
+            );
+            const HighestBreakingVersion = await GetHighestVersion(
+              OtherVersions
+            );
+            const HighestFeaturedVersionStr = ShowDiffChalk(
+              HighestFeatVersion,
+              HighestFeatVersion === pkgNameParsed.PackageVersion
+            );
+            const HighestBreakingVersionStr = ShowDiffChalk(
+              HighestBreakingVersion,
+              HighestBreakingVersion === PublishedInfo.Parsed.PackageVersion
+            );
+            SHOW_NAME += ` | ${HighestFeaturedVersionStr} | ${HighestBreakingVersionStr}`;
           }
+          SHOW_NAME += ` | ${ShowDiffChalk(
+            pkg.publish_sig,
+            PublishedInfo.Package.publish_sig === pkg.publish_sig
+          )}`;
         } else {
           SHOW_NAME += ` | ${chalk.red("NOT PUBLISHED!")}`;
         }

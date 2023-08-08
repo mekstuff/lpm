@@ -1,11 +1,12 @@
+//TODO: if xd2 imports xd and xd4 adds xd2, since xd2 imported xd, the resolve is a .lpm folder in root
+//To fix might just need to have resolvepackaes run when installing, so it checks for imported packages of added packages.
+
 import fs from "fs";
-import LogTree, { Tree } from "console-log-tree";
 import chalk from "chalk";
 import logreport from "../utils/logreport.js";
 import pluralize from "pluralize";
 import { program as CommanderProgram } from "commander";
 import { SUPPORTED_PACKAGE_MANAGERS } from "../utils/CONSTANTS.js";
-import { GetPreferredPackageManager } from "./add-link.js";
 import {
   AddInstallationsToGlobalPackage,
   GenerateLockFileAtCwd,
@@ -13,21 +14,38 @@ import {
   GetLPMPackagesJSON,
   ReadLPMPackagesJSON,
   ReadLockFileFromCwd,
-  ILPMPackagesJSON,
-  ILPMPackagesJSON_Package,
-  ILPMPackagesJSON_Package_installations_installtypes,
-  LOCKFILEPKG,
+  ResolvePackageFromLPMJSON,
+  IAddInstallationsToGlobalPackage_Package,
+  dependency_scope,
+  GetPackageFromLockFileByName,
 } from "../utils/lpmfiles.js";
 import path from "path";
 import { execSync } from "child_process";
-import { ParsePackageName, ReadPackageJSON } from "../utils/PackageReader.js";
 
+import {
+  PackageFile,
+  ParsePackageName,
+  ReadPackageJSON,
+  WritePackageJSON,
+} from "../utils/PackageReader.js";
+
+export function GetPreferredPackageManager(): SUPPORTED_PACKAGE_MANAGERS {
+  return "yarn";
+}
 export interface AddOptions {
   packageManager?: SUPPORTED_PACKAGE_MANAGERS;
   showPmLogs?: boolean;
   import?: boolean;
+  dev?: boolean;
+  peer?: boolean;
+  optional?: boolean;
+  traverseImports?: boolean;
+  preserveImport?: boolean;
 }
 
+/**
+ * Bulk removes packages then generates a new seal to remove unwanted packages
+ */
 export async function BulkRemovePackagesFromLocalCwdStore(
   cwd: string,
   packages: string[],
@@ -36,8 +54,13 @@ export async function BulkRemovePackagesFromLocalCwdStore(
   packages.map(async (p) => {
     await RemovePackageFromLocalCwdStore(cwd, p, noErrors);
   });
+  const Seal = await GenerateLocalCwdTreeSeal(cwd);
+  await RemoveUnwantedPackagesFromLpmLocalFromSeal(cwd, Seal);
 }
 
+/**
+ * Called by bulk remove, to remove unwanted packages, use builkremove.
+ */
 async function RemovePackageFromLocalCwdStore(
   cwd: string,
   pkgName: string,
@@ -47,8 +70,9 @@ async function RemovePackageFromLocalCwdStore(
   if (!fs.existsSync(cwd_lpm_path)) {
     return;
   }
+  const ParsedInfo = ParsePackageName(pkgName);
   try {
-    fs.rmSync(path.join(cwd_lpm_path, pkgName), {
+    fs.rmSync(path.join(cwd_lpm_path, ParsedInfo.FullResolvedName), {
       recursive: true,
       force: true,
     });
@@ -58,143 +82,231 @@ async function RemovePackageFromLocalCwdStore(
   } catch (err) {
     if (!noErrors) {
       logreport.error(
-        "Could not remove package from => " + path.join(cwd_lpm_path, pkgName)
+        "Could not remove package from => " +
+          path.join(cwd_lpm_path, ParsedInfo.FullResolvedName)
       );
     }
   }
 }
 
-async function AddPackageToLocalCwdStore(
-  cwd: string,
-  pkgName: string,
-  pkg: Pick<LOCKFILEPKG, "install_type" | "resolve">
-): Promise<string> {
-  const cwd_lpm_path = path.join(cwd, ".lpm");
-  if (!fs.existsSync(cwd_lpm_path)) {
-    try {
-      fs.mkdirSync(cwd_lpm_path, { recursive: true });
-    } catch (e) {
-      logreport.error(`Could not create ${cwd_lpm_path}. => ${e}`);
-      process.exit(1);
-    }
-  }
-  const pkgNameSplit = pkgName.split("/");
-  let Orginization: string | undefined;
-  let Package: string;
-  if (pkgNameSplit.length > 1) {
-    Orginization = pkgNameSplit[0];
-    Package = pkgNameSplit[1];
-  } else {
-    Package = pkgName;
-  }
-  let InstallationPath = path.join(
-    cwd_lpm_path,
-    Orginization ? Orginization : "",
-    Package
-  );
+type TreeSealArray = {
+  [key: string]: {
+    installs: {
+      installdir: string;
+      dependency_scope: dependency_scope;
+    }[];
+    resolve: string;
+  };
+};
 
-  if (
-    Orginization !== undefined &&
-    !fs.existsSync(path.join(cwd_lpm_path, Orginization))
-  ) {
-    try {
-      fs.mkdirSync(path.join(cwd_lpm_path, Orginization), {
-        recursive: true,
-      });
-    } catch (e) {
-      logreport.error(
-        `Could not create originization scope path for "${Orginization}". => ${e}`
-      );
-      process.exit(1);
-    }
+/**
+ * Called recursively until all packages dependencies are resolved.
+ * @param rootDirectory is automatically set, refers to the root directory of the initial call, will be the initial targetDirectory
+ * @param depOfDep Is automatically set, refers to the package in which the dep is installed, at top level it will be rootDirectory.
+ * @param traverseFolliwingImports If a parent directory has traverse-imports to true, then we will traverse imports of every descendant of that.
+ */
+async function GetDirectoryDependenciesForCwdTreeSeal(
+  TargetDirectory: string,
+  TreeSealArray: TreeSealArray,
+  rootDirectory?: string,
+  depOfDep?: string,
+  traverseFolliwingImports?: boolean
+) {
+  const LPMLOCK = await ReadLockFileFromCwd(TargetDirectory, undefined, true);
+  if (!LPMLOCK) {
+    return false;
   }
-  /* */
-  try {
-    /* FOR RESOLVE LOCALLY IN .lpm FOLDER */
-    if (pkg.install_type === "import") {
-      fs.cpSync(pkg.resolve, InstallationPath, {
-        force: true,
-        recursive: true,
-      });
-      InstallationPath = path.relative(cwd, InstallationPath);
-    }
-    /* */
-  } catch (err) {
-    logreport.error(`Failed to copy pkg "${pkgName}" => ${err}`);
+  if (!rootDirectory) {
+    rootDirectory = TargetDirectory;
   }
-  return InstallationPath;
+
+  for (const p in LPMLOCK.pkgs) {
+    const tp = LPMLOCK.pkgs[p];
+    if (tp.traverse_imports) {
+      traverseFolliwingImports = true;
+    }
+    const n = p + "--" + tp.publish_sig;
+    if (tp.install_type !== "import" && !traverseFolliwingImports) {
+      continue;
+    }
+    if (!TreeSealArray[n]) {
+      TreeSealArray[n] = {
+        installs: [],
+        resolve: tp.resolve,
+      };
+    }
+    TreeSealArray[n].installs.push({
+      installdir: depOfDep
+        ? path.join(rootDirectory, ".lpm", depOfDep)
+        : rootDirectory,
+      dependency_scope: tp.dependency_scope,
+    });
+    await GetDirectoryDependenciesForCwdTreeSeal(
+      tp.resolve,
+      TreeSealArray,
+      rootDirectory,
+      n,
+      traverseFolliwingImports
+    );
+  }
 }
 
 /**
- * TODO: Since add injects modules, It updates dependencies without publishing/pushing. This behaviour may need to be changed
+ * Generates a tree seal array from the rootDirectory
  */
-const InjectToNode_Modules = async (
-  name: string,
-  resolve: string,
-  WORKING_DIRECTORY: string,
-  install_type: ILPMPackagesJSON_Package_installations_installtypes
-) => {
-  if (install_type === "import") {
-    resolve = await AddPackageToLocalCwdStore(WORKING_DIRECTORY, name, {
-      install_type: install_type,
-      resolve,
-    });
+async function GenerateLocalCwdTreeSeal(
+  rootDirectory: string
+): Promise<TreeSealArray> {
+  const store_cache_path = path.join(rootDirectory, ".lpm", ".lpm-seal.lock");
+  if (fs.existsSync(store_cache_path)) {
+    fs.rmSync(store_cache_path, { recursive: true, force: true });
+    fs.mkdirSync(store_cache_path, { recursive: true });
   }
-  const { OrginizationName, PackageName } = await ParsePackageName(name);
-  const p = path.join(WORKING_DIRECTORY, "node_modules", name);
-  try {
-    if (fs.existsSync(p)) {
-      fs.rmSync(p, { recursive: true, force: true });
-    }
-    fs.cpSync(
-      resolve,
-      path.join(
-        WORKING_DIRECTORY,
-        "node_modules",
-        OrginizationName,
-        PackageName
-      ),
-      { recursive: true }
-    );
-  } catch (e) {
-    logreport.error(`Failed to inject package ${name} => ${e}`);
-  }
-};
+  const CArray: TreeSealArray = {};
+  await GetDirectoryDependenciesForCwdTreeSeal(rootDirectory, CArray);
+  return CArray;
+}
 
-const ForEachInjectInstallation = async (
-  installations: ILPMPackagesJSON_Package["installations"],
-  name: string,
-  resolve: string,
-  LPMPackages: ILPMPackagesJSON["packages"]
-) => {
-  for (const x of installations) {
-    await InjectToNode_Modules(name, resolve, x.path, x.install_type);
-    const { success, result } = await ReadPackageJSON(x.path);
-    if (!success || typeof result === "string") {
+/**
+ * Resolves packages from the tree seal data, adding them to the .lpm dir and updating any dependeant package.json file.
+ */
+async function ResolvePackagesFromTreeSeal(
+  rootDirectory: string,
+  Seal: TreeSealArray
+) {
+  const lpmdir = path.join(rootDirectory, ".lpm");
+  let linkinstalls: {
+    pkg: string;
+    parsedpkgname: string;
+    installdir: string;
+    dependency_scope: dependency_scope;
+  }[] = [];
+  for (const pkg in Seal) {
+    const ns = pkg.split("--");
+    const ParsedInfo = ParsePackageName(ns[0]);
+    const v = Seal[pkg];
+    const dir = path.join(lpmdir, pkg);
+    if (fs.existsSync(dir)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+    fs.cpSync(v.resolve, dir, { recursive: true, force: true });
+    linkinstalls = [
+      ...linkinstalls,
+      ...v.installs.map((x) => {
+        return {
+          pkg: pkg,
+          parsedpkgname: ParsedInfo.FullPackageName,
+          installdir: x.installdir,
+          dependency_scope: x.dependency_scope,
+        };
+      }),
+    ];
+  }
+  //linking installs
+  for (const x of linkinstalls) {
+    const PackageJSONOfInstall = await ReadPackageJSON(x.installdir);
+    if (
+      !PackageJSONOfInstall.success ||
+      typeof PackageJSONOfInstall.result === "string"
+    ) {
       continue;
     }
-    const published = LPMPackages[result.name || ""];
-    if (published) {
-      await ForEachInjectInstallation(
-        published.installations,
-        name,
-        resolve,
-        LPMPackages
-      );
+    if (!PackageJSONOfInstall.result[x.dependency_scope]) {
+      PackageJSONOfInstall.result[x.dependency_scope] = {};
+    }
+    await RemovePackageNameFromDependencyScopes(
+      x.parsedpkgname,
+      PackageJSONOfInstall.result
+    );
+    //@ts-expect-error ^^ sets object but following assumes it can be undefined.
+    PackageJSONOfInstall.result[x.dependency_scope][
+      x.parsedpkgname
+    ] = `file:${path.join(path.relative(x.installdir, lpmdir), x.pkg)}`;
+    await WritePackageJSON(
+      x.installdir,
+      JSON.stringify(PackageJSONOfInstall.result, undefined, 2)
+    );
+  }
+}
+
+/**
+ * Any packages that aren't listed in treeseal array will be removed if exists.
+ */
+async function RemoveUnwantedPackagesFromLpmLocalFromSeal(
+  rootDirectory: string,
+  Seal: TreeSealArray
+) {
+  const lpmdir = path.join(rootDirectory, ".lpm");
+  if (!fs.existsSync(lpmdir)) {
+    return;
+  }
+  const indir = fs.readdirSync(lpmdir);
+  let removed = 0;
+  for (const f of fs.readdirSync(lpmdir)) {
+    if (!Seal[f]) {
+      fs.rmSync(path.join(lpmdir, f), { recursive: true, force: true });
+      removed++;
     }
   }
-};
+  if (removed === indir.length) {
+    fs.rmSync(lpmdir, { recursive: true, force: true });
+  }
+}
 
+/**
+ * For handling injecting a package.
+ */
+async function HandleInjectPackage(
+  cwd: string,
+  Inject: RequireFileChangeGenerateObj
+) {
+  const parsed = ParsePackageName(Inject.name);
+  const node_modules = path.join(cwd, "node_modules");
+  const name_node_modules = path.join(node_modules, parsed.FullPackageName);
+  if (fs.existsSync(name_node_modules)) {
+    fs.rmSync(name_node_modules, { recursive: true, force: true });
+  }
+  //update in node_modules
+  fs.cpSync(Inject.resolve, name_node_modules, {
+    recursive: true,
+    force: true,
+  });
+}
+
+/**
+ * Removes package from the package.json dependency list.
+ */
+async function RemovePackageNameFromDependencyScopes(
+  PackageName: string,
+  packageFileResults: PackageFile
+) {
+  const t = [
+    "dependencies",
+    "peerDependencies",
+    "optionalDependencies",
+    "devDependencies",
+  ];
+  for (const d of t) {
+    if (packageFileResults[d as dependency_scope]) {
+      //@ts-expect-error ^^ sets object but following assumes it can be undefined.
+      packageFileResults[d as dependency_scope][PackageName] =
+        undefined as unknown as string;
+    }
+  }
+}
+
+/**
+ * Adds file from the data generated by the lock, installing packages that are required to be installed and injecting those required to be injected.
+ */
 export async function AddFilesFromLockData(
   PackageManager: SUPPORTED_PACKAGE_MANAGERS,
   log: boolean | undefined,
-  targetCwd: string | undefined,
+  cwd: string,
   ToInstall: RequireFileChangeGenerateObj[],
   ToInject: RequireFileChangeGenerateObj[]
 ) {
-  const cwd = targetCwd ? targetCwd : process.cwd();
-  const LOCKFILE = await ReadLockFileFromCwd(cwd);
-  const TargetPkgs: (typeof LOCKFILE)["pkgs"] = {};
+  let useSeal: TreeSealArray | undefined;
+  let MUST_RESOLVE_PACKAGES_FROM_useSEAL = false;
   if (ToInject.length > 0) {
     logreport(
       `Injecting ${ToInject.length} ${pluralize(
@@ -204,17 +316,12 @@ export async function AddFilesFromLockData(
       "log",
       true
     );
-
-    for (const val of ToInject) {
-      await ForEachInjectInstallation(
-        val.data.installations,
-        val.name,
-        val.data.resolve,
-        (
-          await ReadLPMPackagesJSON()
-        ).packages
-      );
+    for (const inject of ToInject) {
+      await HandleInjectPackage(cwd, inject);
     }
+    useSeal = await GenerateLocalCwdTreeSeal(cwd);
+    //We do not resolve seals here, if anything is to install then resolve seal if not, resolve seal, so it's only called once instead of twice if both toinstall and toinject is ran.
+    MUST_RESOLVE_PACKAGES_FROM_useSEAL = true;
   }
   if (ToInstall.length > 0) {
     logreport(
@@ -225,96 +332,61 @@ export async function AddFilesFromLockData(
       "log",
       true
     );
-    for (const val of ToInstall) {
-      TargetPkgs[val.name] = {
-        resolve: val.data.resolve,
-        publish_sig: val.data.publish_sig,
-        install_type: val.install_type,
-      };
+    const Seal = useSeal || (await GenerateLocalCwdTreeSeal(cwd));
+    useSeal = Seal;
+    await ResolvePackagesFromTreeSeal(cwd, Seal);
+    //we read after sealing since sealing may change the package json, might aswell just pass as param to seal in future.
+    const cwdJSON = await ReadPackageJSON(cwd);
+    if (!cwdJSON.success || typeof cwdJSON.result === "string") {
+      logreport.error(
+        `${cwd} does not have a package.json file. => ${cwdJSON.result}`
+      );
+      process.exit(1);
     }
+    for (const i of ToInstall) {
+      if (i.install_type !== "default") {
+        //imports are handled through `ResolvePackagesFromTreeSeal`
+        continue;
+      }
+      const parsed = ParsePackageName(i.name);
+      await RemovePackageNameFromDependencyScopes(
+        parsed.FullPackageName,
+        cwdJSON.result
+      );
+      cwdJSON.result[i.dependency_scope] =
+        cwdJSON.result[i.dependency_scope] || {};
+      //@ts-expect-error ^^ sets object but following assumes it can be undefined.
+      cwdJSON.result[i.dependency_scope][
+        parsed.FullPackageName
+      ] = `file:${i.resolve}`;
+    }
+    await WritePackageJSON(cwd, JSON.stringify(cwdJSON.result, undefined, 2));
+    try {
+      execSync(`${PackageManager}`, {
+        cwd: cwd,
+        stdio: log ? "inherit" : "ignore",
+      });
+    } catch (err) {
+      console.error(err);
+      logreport.error(err);
+    }
+    await RemoveUnwantedPackagesFromLpmLocalFromSeal(cwd, useSeal);
   } else {
+    if (MUST_RESOLVE_PACKAGES_FROM_useSEAL && useSeal) {
+      await ResolvePackagesFromTreeSeal(cwd, useSeal); //if packages were injected and nothing was installed, we need to resolve, since we don't resolve after injection since resolve will be called twice if there's any installs.
+      await RemoveUnwantedPackagesFromLpmLocalFromSeal(cwd, useSeal);
+    }
     logreport("Up to date.", "log", true);
     return;
-  }
-
-  /* FOR RESOLVE LOCALLY IN .lpm FOLDER */
-
-  /* */
-  type DEPSDATA = { name: string; install: string };
-  const NORMAL_DEPS: DEPSDATA[] = [];
-  const DEV_DEPS: DEPSDATA[] = [];
-
-  for (const pkgName in TargetPkgs) {
-    let InstallationPath: string | undefined;
-    const pkg = TargetPkgs[pkgName];
-    /* FOR RESOLVE LOCALLY IN .lpm FOLDER */
-    if (pkg.install_type === "import") {
-      InstallationPath = await AddPackageToLocalCwdStore(cwd, pkgName, pkg);
-    } else {
-      InstallationPath = pkg.resolve;
-    }
-    if (InstallationPath === undefined) {
-      logreport.error("Could not resolve installation path");
-      process.exit(1);
-    }
-
-    const str = `file:${InstallationPath}`;
-    const data = {
-      name: pkgName,
-      install: str,
-    };
-    if (pkg.dependencyScope === "devDependencies") {
-      DEV_DEPS.push(data);
-    } else {
-      NORMAL_DEPS.push(data);
-    }
-  }
-  const PackageJSON = await ReadPackageJSON(cwd, undefined, true);
-  if (!PackageJSON.success || typeof PackageJSON.result === "string") {
-    logreport.error("Could not read package json => " + PackageJSON.result);
-    process.exit(1);
-  }
-
-  const tree: Tree[] = [];
-
-  const forEachDep = (deps: DEPSDATA[], depFlag?: string) => {
-    if (deps.length <= 0) {
-      return;
-    }
-    const showTreeInfo: Tree[] = [];
-    let str = `${PackageManager}${depFlag ? " --" + depFlag : ""} add `;
-    deps.map((x) => {
-      showTreeInfo.push({
-        name: x.name,
-      });
-      str += x.install + " ";
-    });
-    try {
-      execSync(str, { cwd: cwd, stdio: log ? "inherit" : "ignore" });
-    } catch (e) {
-      logreport.error(e);
-      process.exit(1);
-    }
-    tree.push({
-      name: depFlag ? depFlag.toUpperCase() + " DEPS" : "DEPS",
-      children: showTreeInfo,
-    });
-  };
-  try {
-    forEachDep(NORMAL_DEPS);
-    forEachDep(DEV_DEPS, "--dev");
-    console.log("\n" + LogTree.parse(tree));
-  } catch (err) {
-    logreport.error(
-      `Failed to install packages with ${chalk.blue(
-        PackageManager
-      )} => ${chalk.red(err)}`
-    );
   }
 }
 
 export default class add {
   async Add(Arg0: string[], Options: AddOptions) {
+    if (Options.traverseImports && !Options.import) {
+      logreport.error("You cannot set traverse-imports without importing .");
+      process.exit(1);
+    }
     if (!Options.packageManager) {
       Options.packageManager = GetPreferredPackageManager();
     }
@@ -325,6 +397,8 @@ export default class add {
     );
     const Packages: string[] = [];
     const PackageManagerFlags: string[] = [];
+    const AddToInstallationsData: IAddInstallationsToGlobalPackage_Package[] =
+      [];
     Arg0.forEach((arg) => {
       if (!arg.match("^-")) {
         Packages.push(arg);
@@ -333,53 +407,130 @@ export default class add {
       }
     });
     const GlobalPkgsIndex = await ReadLPMPackagesJSON();
-    const PKGS_RESOLVES: { name: string; resolve: string }[] = [];
+    const LOCKFILE = await ReadLockFileFromCwd(undefined, true, true);
     for (const index in Packages) {
-      const pkg = Packages[index];
+      let pkg = Packages[index];
       logreport.Elapse(
         `Fetching package ${chalk.blue(pkg)} [${Number(index) + 1} / ${
           Packages.length
         }]...`,
         "INSTALL_PKGS"
       );
-      const InGlobalIndex = GlobalPkgsIndex.packages[pkg];
+      let KEEP_CURRENT_VERSION_WHEN_RESOLVE = false;
+      const InitialNameParse = ParsePackageName(pkg);
+      //if we are requiring latest, check if it's already installed and install latest relative to previously installed.
+      if (InitialNameParse.PackageVersion === "latest") {
+        for (const PKG in LOCKFILE.pkgs) {
+          // const t = LOCKFILE.pkgs[PKG];
+          const p = ParsePackageName(PKG);
+          if (p.FullPackageName === InitialNameParse.FullPackageName) {
+            //update the pkg string so when fetching it will use that @version instead of @latest.
+            //if version was @latest and no semver symbol is set, use ^
+            pkg = `${p.FullPackageName}@${LOCKFILE.pkgs[PKG].sem_ver_symbol}${p.PackageVersion}`;
+            break;
+          }
+        }
+      } else {
+        KEEP_CURRENT_VERSION_WHEN_RESOLVE = true;
+      }
+      const InGlobalIndex = await ResolvePackageFromLPMJSON(
+        pkg,
+        GlobalPkgsIndex,
+        KEEP_CURRENT_VERSION_WHEN_RESOLVE
+      );
       if (!InGlobalIndex) {
         logreport.error(
           `"${pkg}" was not found within the local package registry.`
         );
+        process.exit(1);
       }
       logreport.assert(
-        typeof InGlobalIndex.resolve === "string",
+        typeof InGlobalIndex.Package.resolve === "string",
         `"${pkg}" Package does not have a valid resolve field in global index! ${await GetLPMPackagesJSON()}`
       );
       logreport.assert(
-        typeof InGlobalIndex.installations === "object",
+        typeof InGlobalIndex.Package.installations === "object",
         `"${pkg}" Package does not have a valid installations field in global index! ${await GetLPMPackagesJSON()}`
       );
-      if (!Options.import && InGlobalIndex.requires_import === true) {
+      if (!Options.import && InGlobalIndex.Package.requires_import === true) {
         logreport.error(
           `"${pkg}" requires to be imported, try ${chalk.bold(
             `lpm import ${pkg}`
           )}`
         );
       }
-      PKGS_RESOLVES.push({
-        name: pkg,
-        resolve: InGlobalIndex.resolve,
+      //Add fetch package from lock file by name function to get old version.
+      const CURR_LOCK_FILE_DATA =
+        LOCKFILE &&
+        (await GetPackageFromLockFileByName(
+          InGlobalIndex.Parsed.FullPackageName,
+          process.cwd(),
+          LOCKFILE
+        ));
+      let FORCE_USE_DEPENDENCY_SCOPE: dependency_scope | undefined;
+      if (
+        CURR_LOCK_FILE_DATA &&
+        !Options.dev &&
+        !Options.optional &&
+        !Options.peer
+      ) {
+        //if none provided, use old install dep scope from lock file if exists.
+        FORCE_USE_DEPENDENCY_SCOPE = CURR_LOCK_FILE_DATA.dependency_scope;
+      }
+
+      //keep import and traverse state
+      if (CURR_LOCK_FILE_DATA) {
+        if (CURR_LOCK_FILE_DATA.traverse_imports === true) {
+          Options.traverseImports = true;
+        }
+        if (CURR_LOCK_FILE_DATA.install_type === "import") {
+          if (!Options.import) {
+            if (!Options.preserveImport) {
+              logreport.warn(
+                `${InGlobalIndex.Parsed.FullResolvedName} was previously imported but now is a default installation.`
+              );
+            } else {
+              logreport(
+                `Preserved import for ${InGlobalIndex.Parsed.FullResolvedName}`,
+                "log",
+                true
+              );
+              Options.import = true;
+            }
+          }
+        } else if (CURR_LOCK_FILE_DATA.install_type === "default") {
+          if (Options.import) {
+            logreport.warn(
+              `${InGlobalIndex.Parsed.FullResolvedName} was previously a default installation but is now imported.`
+            );
+          }
+        }
+      }
+      AddToInstallationsData.push({
+        packageName: InGlobalIndex.Parsed.FullSemVerResolvedName,
+        installInfo: {
+          path: process.cwd(),
+          install_type: Options.import ? "import" : "default",
+          traverse_imports: Options.traverseImports || false,
+          dependency_scope: FORCE_USE_DEPENDENCY_SCOPE
+            ? FORCE_USE_DEPENDENCY_SCOPE
+            : Options.dev
+            ? "devDependencies"
+            : Options.optional
+            ? "optionalDependencies"
+            : Options.peer
+            ? "peerDependencies"
+            : "dependencies",
+        },
       });
     }
-    await AddInstallationsToGlobalPackage(Packages, [
-      {
-        path: process.cwd(),
-        install_type: Options.import ? "import" : "default",
-      },
-    ]);
+    await AddInstallationsToGlobalPackage(AddToInstallationsData);
     const { RequiresInstall, RequiresNode_Modules_Injection } =
       await GenerateLockFileAtCwd();
     await AddFilesFromLockData(
       Options.packageManager,
       Options.showPmLogs,
-      undefined,
+      process.cwd(),
       RequiresInstall,
       RequiresNode_Modules_Injection
     );
@@ -392,6 +543,17 @@ export default class add {
         "Add a package to your project. Any Unknown Options will be sent to the package manager."
       )
       .option("-pm, --package-manager [string]", "The package manager to use.")
+      .option("-D, --dev", "Save as dev dependency")
+      .option("-P, --peer", "Save as dev dependency")
+      .option("-O, --optional", "Save as optional dependency")
+      .option(
+        "--traverse-imports",
+        "Makes it so every imported package dependency is imported aswell. e.g `pkg1` has dependency of `pkg2`, `pkg1` does not import `pkg2`, when `pkg3` installs `pkg1` to have pkg2 to be imported aswell, use this flag. "
+      )
+      .option(
+        "--preserve-import",
+        "If previously imported and you try to add without --import, you will be prompted. Setting this keeps import as true"
+      )
       .option(
         "-log, --show-pm-logs [boolean]",
         "Show package managers output in terminal.",
