@@ -10,9 +10,9 @@ import {
   GetLPMPackagesDirectory,
   ReadLPMPackagesJSON,
 } from "../utils/lpmfiles.js";
-import { execSync } from "child_process";
 import { BackUpLPMPackagesJSON } from "./backup.js";
 import enqpkg from "enquirer";
+import runScriptsSync from "../utils/run-scripts.js";
 const { prompt } = enqpkg;
 
 interface PublishOptions {
@@ -68,22 +68,7 @@ export default class publish extends pack {
         });
     }
     logreport.Elapse(`Publishing ${ParsedInfo.FullResolvedName}`, "PUBLISH");
-    if (result.scripts) {
-      if (Options.scripts) {
-        const PrePublishOnlyScript = result.scripts["prepublishOnly"];
-        if (PrePublishOnlyScript) {
-          logreport("Running `prepublishOnly` script", "log", true);
-          execSync(PrePublishOnlyScript, {
-            cwd: packagePath,
-            stdio: "inherit",
-          });
-        }
-      } else {
-        // logreport.warn(
-        //   "scripts detected but `--no-scripts` flag was passed, not executing."
-        // );
-      }
-    }
+    runScriptsSync(packagePath, result, ["prepublishOnly"], Options.scripts);
 
     const PackageOutputPath = path.join(
       ParsedInfo.FullPackageName,

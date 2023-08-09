@@ -1,12 +1,18 @@
-import LogReport from "@mekstuff/logreport";
-import { program as CommanderProgram } from "commander";
-import enqpkg from "enquirer";
-import { ReadLPMPackagesJSON, ReadLockFileFromCwd } from "../utils/lpmfiles.js";
-import { ReadPackageJSON } from "../utils/PackageReader.js";
-import chalk from "chalk";
-import { execSync } from "child_process";
-const { prompt } = enqpkg;
+// import LogReport from "@mekstuff/logreport";
+// import { program as CommanderProgram } from "commander";
+// import enqpkg from "enquirer";
+// import { ReadLPMPackagesJSON, ReadLockFileFromCwd } from "../utils/lpmfiles.js";
+// import { ReadPackageJSON } from "../utils/PackageReader.js";
+// import chalk from "chalk";
+// import { execSync } from "child_process";
+// const { prompt } = enqpkg;
 
+export default class outdated {
+  build() {
+    return;
+  }
+}
+/*
 export default class outdated {
   async Outdated(TargetPackage?: string) {
     const res = await prompt<{
@@ -145,3 +151,4 @@ export default class outdated {
       });
   }
 }
+*/

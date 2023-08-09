@@ -13,6 +13,8 @@ import {
   SemVersionSymbol,
 } from "./PackageReader.js";
 import LogTree from "console-log-tree";
+import enqpkg from "enquirer";
+const { prompt } = enqpkg;
 
 /**
  * Default lpm directory path
@@ -365,7 +367,8 @@ export async function AddPackagesToLPMJSON(
  * Removes the packages from the lpm pkgs json file. also removes from version tree.
  */
 export async function RemovePackagesFromLPMJSON(
-  Packages: { name: string; version: string }[]
+  Packages: { name: string; version: string }[],
+  promptVerifyPackagesWithInstalls?: boolean
 ): Promise<boolean> {
   logreport.assert(typeof Packages === "object", "Invalid Packages passed.");
   try {
@@ -377,6 +380,32 @@ export async function RemovePackagesFromLPMJSON(
         LPMPackagesJSON
       );
       if (PublishInfo) {
+        if (
+          PublishInfo.Package.installations.length > 0 &&
+          promptVerifyPackagesWithInstalls
+        ) {
+          await prompt<{ verify: boolean }>({
+            name: "verify",
+            type: "confirm",
+            message: `${PublishInfo.Parsed.FullResolvedName} is installed in ${
+              PublishInfo.Package.installations.length
+            } ${pluralize(
+              "directories",
+              PublishInfo.Package.installations.length
+            )}. Are you sure you want to unpublish?\n\n${PublishInfo.Package.installations
+              .map((x) => x.path)
+              .join("\n")}`,
+          })
+            .then((res) => {
+              if (res.verify !== true) {
+                process.exit(1);
+              }
+            })
+            .catch((err) => {
+              logreport.error(err);
+              process.exit(1);
+            });
+        }
         delete LPMPackagesJSON.packages[ParsedInfo.FullResolvedName];
         const inVersion =
           LPMPackagesJSON.version_tree[ParsedInfo.FullPackageName];

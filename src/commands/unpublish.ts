@@ -36,9 +36,15 @@ export default class unpublish extends pack {
       ParsedInfo.PackageVersion
     );
 
-    await RemovePackagesFromLPMJSON([
-      { name: ParsedInfo.FullPackageName, version: ParsedInfo.PackageVersion },
-    ]).then((removed) => {
+    await RemovePackagesFromLPMJSON(
+      [
+        {
+          name: ParsedInfo.FullPackageName,
+          version: ParsedInfo.PackageVersion,
+        },
+      ],
+      true
+    ).then((removed) => {
       if (!removed) {
         logreport(
           `Could not remove package to global json file! ${ParsedInfo.FullResolvedName} => ${PackageOutputPath}`

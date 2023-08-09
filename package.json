@@ -9,7 +9,7 @@
     "lpx": "dist/lpx.js"
   },
   "dependencies": {
-    "@mekstuff/logreport": "file:C:\\Users\\Lanzo\\.local-package-manager\\packages\\@mekstuff\\logreport\\pkg",
+    "@mekstuff/logreport": "file:C:\\Users\\Lanzo\\.local-package-manager\\packages\\@mekstuff\\logreport\\1.0.0-dev\\pkg",
     "@types/pluralize": "^0.0.30",
     "chalk": "^5.3.0",
     "commander": "^10.0.1",
