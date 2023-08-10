@@ -381,7 +381,14 @@ export async function AddFilesFromLockData(
 }
 
 export default class add {
-  async Add(Arg0: string[], Options: AddOptions) {
+  async Add(
+    Arg0: string[],
+    Options: AddOptions,
+    targetWorkingDirectory?: string
+  ) {
+    targetWorkingDirectory = targetWorkingDirectory
+      ? targetWorkingDirectory
+      : process.cwd();
     if (Options.traverseImports && !Options.import) {
       logreport.error("You cannot set traverse-imports without importing .");
       process.exit(1);
@@ -406,7 +413,11 @@ export default class add {
       }
     });
     const GlobalPkgsIndex = await ReadLPMPackagesJSON();
-    const LOCKFILE = await ReadLockFileFromCwd(undefined, true, true);
+    const LOCKFILE = await ReadLockFileFromCwd(
+      targetWorkingDirectory,
+      true,
+      true
+    );
     for (const index in Packages) {
       let pkg = Packages[index];
       logreport.Elapse(
@@ -465,7 +476,7 @@ export default class add {
         LOCKFILE &&
         (await GetPackageFromLockFileByName(
           InGlobalIndex.Parsed.FullPackageName,
-          process.cwd(),
+          targetWorkingDirectory,
           LOCKFILE
         ));
       let FORCE_USE_DEPENDENCY_SCOPE: dependency_scope | undefined;
@@ -510,7 +521,7 @@ export default class add {
       AddToInstallationsData.push({
         packageName: InGlobalIndex.Parsed.FullSemVerResolvedName,
         installInfo: {
-          path: process.cwd(),
+          path: targetWorkingDirectory,
           install_type: Options.import ? "import" : "default",
           traverse_imports: Options.traverseImports || false,
           dependency_scope: FORCE_USE_DEPENDENCY_SCOPE
@@ -527,11 +538,11 @@ export default class add {
     }
     await AddInstallationsToGlobalPackage(AddToInstallationsData);
     const { RequiresInstall, RequiresNode_Modules_Injection } =
-      await GenerateLockFileAtCwd();
+      await GenerateLockFileAtCwd(targetWorkingDirectory);
     await AddFilesFromLockData(
       Options.packageManager,
       Options.showPmLogs,
-      process.cwd(),
+      targetWorkingDirectory,
       RequiresInstall,
       RequiresNode_Modules_Injection
     );

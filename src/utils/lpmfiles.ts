@@ -14,6 +14,7 @@ import {
 } from "./PackageReader.js";
 import LogTree from "console-log-tree";
 import enqpkg from "enquirer";
+import { getcommand } from "../lpm.js";
 const { prompt } = enqpkg;
 
 /**
@@ -232,11 +233,18 @@ export async function ResolvePackageFromLPMJSON(
   return { Package: TargetPackage, Parsed };
 }
 
+/**
+ * Store mthe LPMPackagesJSON in memory so the JSON file is consistent, preventing race conditions.
+ */
+let LPMPackagesJSON_Memory: ILPMPackagesJSON | undefined;
 const CorruptedGlobalRegistryJSONFileWarn = `Possibly corrupted global registry file. You can revert to a previous backed up version or manually try to fix the JSON file if you know what you're doing!\n\nRun 'lpm backup revert' to get to the backup wizard.\nRun 'lpm open json' to open json file.`;
 /**
  * Reads the LPM Packages json file, if it doesn't exists then it will create it.
  */
 export async function ReadLPMPackagesJSON(): Promise<ILPMPackagesJSON> {
+  if (LPMPackagesJSON_Memory !== undefined) {
+    return LPMPackagesJSON_Memory;
+  }
   try {
     const LPMPackagesJSON = await GetLPMPackagesJSON();
     const Data: ILPMPackagesJSON = JSON.parse(
@@ -245,11 +253,13 @@ export async function ReadLPMPackagesJSON(): Promise<ILPMPackagesJSON> {
     if (!Data.packages) {
       logreport.error(CorruptedGlobalRegistryJSONFileWarn);
     }
+    LPMPackagesJSON_Memory = Data;
     return Data;
   } catch (e) {
     logreport.error(`${e} => ` + CorruptedGlobalRegistryJSONFileWarn);
   }
-  return {} as ILPMPackagesJSON;
+  LPMPackagesJSON_Memory = {} as ILPMPackagesJSON;
+  return LPMPackagesJSON_Memory;
 }
 
 /**
@@ -384,9 +394,14 @@ export async function RemovePackagesFromLPMJSON(
           PublishInfo.Package.installations.length > 0 &&
           promptVerifyPackagesWithInstalls
         ) {
-          await prompt<{ verify: boolean }>({
+          await prompt<{ verify: "exit" | "upgrade" | "unpublish" }>({
             name: "verify",
-            type: "confirm",
+            type: "select",
+            choices: [
+              { name: "upgrade", message: "Interactive upgrade" },
+              { name: "unpublish", message: "Force unpublish" },
+              { name: "exit", message: "Exit" },
+            ],
             message: `${PublishInfo.Parsed.FullResolvedName} is installed in ${
               PublishInfo.Package.installations.length
             } ${pluralize(
@@ -396,12 +411,27 @@ export async function RemovePackagesFromLPMJSON(
               .map((x) => x.path)
               .join("\n")}`,
           })
-            .then((res) => {
-              if (res.verify !== true) {
+            .then(async (res) => {
+              if (res.verify === "exit") {
                 process.exit(1);
+              } else if (res.verify === "upgrade") {
+                const UpgradeCommand = await getcommand("upgrade");
+                for (const i of PublishInfo.Package.installations) {
+                  await UpgradeCommand.Upgrade(
+                    PublishInfo.Parsed.FullPackageName,
+                    i.path
+                  );
+                }
+                return await RemovePackagesFromLPMJSON(
+                  Packages,
+                  promptVerifyPackagesWithInstalls
+                );
+              } else {
+                process.exit();
               }
             })
             .catch((err) => {
+              process.exit();
               logreport.error(err);
               process.exit(1);
             });

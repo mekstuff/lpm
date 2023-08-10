@@ -1,6 +1,6 @@
 import * as add from "./add.js";
-
 import * as remove from "./remove.js";
+
 import * as publish from "./publish.js";
 import * as unpublish from "./unpublish.js";
 
@@ -19,8 +19,6 @@ import * as hook from "./hook.js";
 
 import * as backup from "./backup.js";
 
-import * as watch from "./watch.js";
-
 import * as bulk from "./bulk.js";
 
 import * as runrelease from "./run-release.js";
@@ -30,6 +28,8 @@ import * as _import from "./import.js";
 import * as outdated from "./outdated.js";
 
 import * as config from "./config.js";
+
+import * as upgrade from "./upgrade.js";
 
 const commands = {
   add,
@@ -44,12 +44,12 @@ const commands = {
   prepare,
   hook,
   backup,
-  watch,
   bulk,
   runrelease,
   _import,
   outdated,
   config,
+  upgrade,
 };
 
 export default commands;
