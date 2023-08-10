@@ -577,6 +577,11 @@ export default class add {
       )
       .action(async (packages, options) => {
         await this.Add(packages, options);
+      })
+      .command("lock!")
+      .description("Generates a lock file at the current directory")
+      .action(async () => {
+        await GenerateLockFileAtCwd(process.cwd());
       });
   }
 }
