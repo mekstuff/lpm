@@ -1,6 +1,6 @@
 {
   "name": "@mekstuff/logreport",
-  "version": "1.0.0-dev",
+  "version": "1.0.0",
   "main": "dist/index.js",
   "author": "mekstuff <contact@mekstuff.com> (https://github.com/mekstuff)",
   "license": "MIT",

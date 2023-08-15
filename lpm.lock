@@ -1,12 +1,13 @@
 {
   "pkgs": {
-    "@mekstuff/logreport@1.0.0-dev": {
-      "name": "@mekstuff/logreport@1.0.0-dev",
-      "resolve": "C:\\Users\\Lanzo\\.local-package-manager\\packages\\@mekstuff\\logreport\\1.0.0-dev\\pkg",
-      "publish_sig": "8c4e77a413-2b2ae2",
+    "@mekstuff/logreport@1.0.0": {
+      "name": "@mekstuff/logreport@1.0.0",
+      "dependency_scope": "dependencies",
       "install_type": "import",
+      "publish_sig": "cb491340bb-ef91c3",
+      "resolve": "C:\\Users\\Lanzo\\.local-package-manager\\packages\\@mekstuff\\logreport\\1.0.0\\pkg",
       "sem_ver_symbol": "^",
-      "dependency_scope": "dependencies"
+      "traverse_imports": true
     }
   }
 }
