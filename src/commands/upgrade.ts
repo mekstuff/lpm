@@ -6,20 +6,27 @@ import {
   LOCKFILEPKG,
   ReadLPMPackagesJSON,
   ReadLockFileFromCwd,
+  ResolvePackageFromLPMJSON,
 } from "../utils/lpmfiles.js";
 import { ParsePackageName, ReadPackageJSON } from "../utils/PackageReader.js";
 
 import enqpkg from "enquirer";
 import chalk from "chalk";
 import { getcommand } from "../lpm.js";
+import { ShowDiffChalk } from "./list.js";
 const { prompt } = enqpkg;
 
+interface upgradeoptions {
+  latest?: boolean;
+  currentDisabled?: boolean;
+}
 export default class upgrade {
   async RunUpgrade(
     Name: string,
     PackageInfo: LOCKFILEPKG,
     LPMPackages: ILPMPackagesJSON,
     dirname: string,
+    options: upgradeoptions,
     returnRequests?: string[]
   ) {
     const Parsed = ParsePackageName(
@@ -37,7 +44,30 @@ export default class upgrade {
     InVersionTree.sort((a, b) => {
       return semver.compare(b, a);
     });
-
+    if (options.latest) {
+      const Latest = semver.maxSatisfying(
+        InVersionTree,
+        Parsed.VersionWithSymbol
+      );
+      const LatestPublishedVersion = await ResolvePackageFromLPMJSON(
+        `${Parsed.FullPackageName}@${Latest}`
+      );
+      LogReport(
+        `${ShowDiffChalk(
+          Parsed.FullResolvedName,
+          Parsed.PackageVersion === Latest
+        )} | ${ShowDiffChalk(
+          PackageInfo.publish_sig,
+          PackageInfo.publish_sig ===
+            LatestPublishedVersion?.Package.publish_sig
+        )} => ${chalk.greenBright(
+          `${LatestPublishedVersion?.Parsed.FullResolvedName} | ${LatestPublishedVersion?.Package.publish_sig}`
+        )}`,
+        "info",
+        true
+      );
+      return;
+    }
     await prompt<{ nv: string }>({
       name: "nv",
       type: "select",
@@ -46,12 +76,14 @@ export default class upgrade {
         ...InVersionTree.map((x) => {
           const PublishedData =
             LPMPackages.packages[Parsed.FullPackageName + "@" + x];
+          // let str = PackageInfo.sem_ver_symbol + x;
           let str = PackageInfo.sem_ver_symbol + x;
           if (semver.lt(x, Parsed.PackageVersion)) {
             return { name: x, message: chalk.redBright(str) };
           }
           if (x === Parsed.PackageVersion) {
             return {
+              disabled: options.currentDisabled ? true : false,
               name: x,
               message: chalk.gray(
                 (str +=
@@ -68,7 +100,6 @@ export default class upgrade {
             return { name: x, message: chalk.greenBright(str) };
           }
           if (semver.gt(x, Parsed.PackageVersion)) {
-            //   return
             return { name: x, message: chalk.yellow(str) };
           }
           return { name: x, message: str };
@@ -87,13 +118,18 @@ export default class upgrade {
         }
         await getcommand("add").Add([str], {
           showPmLogs: true,
+          lockVersion: true,
         });
       })
       .catch((err) => {
         LogReport.error(err);
       });
   }
-  async Upgrade(targetPackages: string[] | undefined, cwd: string) {
+  async Upgrade(
+    targetPackages: string[] | undefined,
+    cwd: string,
+    options: upgradeoptions
+  ) {
     const currjson = await ReadPackageJSON(cwd);
     let dirname = cwd;
     if (
@@ -118,8 +154,14 @@ export default class upgrade {
       }
       const pkg = LOCK.pkgs[pkgName];
       LogReport(`(${chalk.underline(cwd)})`, "log", true);
-      await this.RunUpgrade(pkgName, pkg, LPMPackages, dirname, toRunUpdate);
-
+      await this.RunUpgrade(
+        pkgName,
+        pkg,
+        LPMPackages,
+        dirname,
+        options,
+        toRunUpdate
+      );
       TotalUpgradesRequestRan++;
     }
     if (TotalUpgradesRequestRan > 0) {
@@ -127,6 +169,7 @@ export default class upgrade {
         toRunUpdate,
         {
           showPmLogs: true,
+          lockVersion: true,
         },
         cwd
       );
@@ -135,8 +178,14 @@ export default class upgrade {
     }
   }
   build(program: typeof CommanderProgram) {
-    program.command("upgrade [packages...]").action(async (packages) => {
-      await this.Upgrade(packages, process.cwd());
-    });
+    program
+      .command("upgrade [packages...]")
+      .option(
+        "--latest",
+        "upgrades to the latest compatiable version of package without prompting selection."
+      )
+      .action(async (packages, options) => {
+        await this.Upgrade(packages, process.cwd(), options);
+      });
   }
 }

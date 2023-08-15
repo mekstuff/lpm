@@ -1,5 +1,3 @@
-import fs from "fs";
-import path from "path";
 import chalk from "chalk";
 import { program as CommanderProgram } from "commander";
 import {
@@ -13,13 +11,13 @@ import {
   ParsePackageName,
   ReadPackageJSON,
 } from "../utils/PackageReader.js";
-
+import pluralize from "pluralize";
 interface ListOptions {
   all?: boolean;
   depth?: number;
 }
 
-function ShowDiffChalk(str: unknown, comparison: unknown) {
+export function ShowDiffChalk(str: unknown, comparison: unknown) {
   if (comparison) {
     return chalk.green(str);
   }
@@ -99,83 +97,74 @@ export default class list {
 
     //--all
     const tree: Tree[] = [];
-
-    for (const Package in LPMPackagesJSON.packages) {
-      if (targetPackage && targetPackage !== Package) {
+    for (const VersionTreePackage in LPMPackagesJSON.version_tree) {
+      if (targetPackage && targetPackage !== VersionTreePackage) {
         continue;
       }
-      const children: Tree[] = [];
-      if (Options.depth !== 0) {
-        for (const installation of LPMPackagesJSON.packages[Package]
-          .installations) {
-          let name: string;
-          let installed_signature: string | undefined;
-          try {
-            name = JSON.parse(
-              fs
-                .readFileSync(path.join(installation.path, "package.json"))
-                .toString()
-            ).name;
-          } catch (e) {
-            name = installation + " | " + chalk.red("No package.json");
-          }
-          try {
-            const LOCK = await ReadLockFileFromCwd(
-              installation.path,
+      const t: Tree[] = [];
+      for (const x of LPMPackagesJSON.version_tree[VersionTreePackage]) {
+        const tp = LPMPackagesJSON.packages[`${VersionTreePackage}@${x}`];
+        if (tp) {
+          const j: Tree = { name: x + " | " + tp.publish_sig };
+          const _t: Tree[] = [];
+          for (const i of tp.installations) {
+            const ijson = await ReadPackageJSON(i.path);
+            const lockatdir = await ReadLockFileFromCwd(
+              i.path,
               undefined,
               true
             );
-            if (LOCK) {
-              const t = LOCK.pkgs[Package] && LOCK.pkgs[Package].publish_sig;
-              if (t) {
-                installed_signature = t;
-              } else {
-                installed_signature = "no-install-signature";
-              }
+            if (!lockatdir) {
+              _t.push({
+                name: "No LOCK file found => " + i.path,
+              });
+              j.children = _t;
+              return;
             }
-          } catch (e) {
-            installed_signature = "failed-to-read-publish-signature";
+            const inlock = lockatdir.pkgs[`${VersionTreePackage}@${x}`];
+            let p: string | undefined;
+            if (ijson.success && typeof ijson.result !== "string") {
+              p = `(${ijson.result.name}) | ${ShowDiffChalk(
+                tp.publish_sig,
+                tp.publish_sig === inlock.publish_sig
+              )} | ${inlock.sem_ver_symbol + x}`;
+            }
+            const v: Tree[] = [];
+            if (p) {
+              v.push({
+                name: chalk.underline(i.path),
+              });
+            }
+            v.push({
+              name: `${inlock.install_type} - ${pluralize(
+                inlock.dependency_scope,
+                1
+              )} ${inlock.traverse_imports ? "| traverse-imports" : ""}`,
+            });
+            _t.push({
+              name: p ? p : i.path,
+              children: v,
+            });
           }
-          const p = path.join(installation.path, "node_modules", Package);
-          if (!fs.existsSync(p)) {
-            name += " | " + chalk.yellow("Not in node_modules");
-          }
-          const SHOW_SIGNATURE =
-            installed_signature ===
-            LPMPackagesJSON.packages[Package].publish_sig
-              ? chalk.green(installed_signature)
-              : chalk.yellow(installed_signature);
-          name += " | " + SHOW_SIGNATURE;
-          children.push({
-            name: name,
-          });
+          j.children = _t;
+          t.push(j);
         }
       }
-
       tree.push({
-        name:
-          "\n" +
-          Package +
-          chalk.bold(` | ${LPMPackagesJSON.packages[Package].publish_sig}`),
-        children: children,
+        name: VersionTreePackage,
+        children: t,
       });
     }
-    console.log(LogTree.parse(tree));
+    console.log(LogTree.parse(tree, "f", "->"));
   }
   build(program: typeof CommanderProgram) {
     program
       .command("list [packageName]")
       .description("List lpm packages")
       .option("-a, --all", "List all published packages")
-      .option("-d, --depth <number>", "List all published packages", "0")
+      .option("-d, --depth <number>", "Depth of the list tree", "1")
       .action(async (targetPackage, options) => {
         await this.List(targetPackage, options);
-      })
-      .command("all [packageName]")
-      .option("-d, --depth <number>", "List all published packages", "1")
-      .action(async (targetPackage, options) => {
-        //TODO: Fix: depth is always 1 no matter if it was set in terminal.
-        await this.List(targetPackage, { ...options, all: true });
       });
   }
 }

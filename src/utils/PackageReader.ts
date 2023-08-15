@@ -12,6 +12,12 @@ interface PackageFileRequired {
   peerDependencies: { [key: string]: string };
   scripts: { [key: string]: string };
   bin: { [key: string]: string };
+  local: Partial<{
+    dependencies: { [key: string]: string | string[] };
+    devDependencies: { [key: string]: string | string[] };
+    optionalDependencies: { [key: string]: string | string[] };
+    peerDependencies: { [key: string]: string | string[] };
+  }>;
 }
 
 export type PackageFile = Partial<PackageFileRequired>;
@@ -145,12 +151,13 @@ export async function ReadPackageJSON(
 export async function WritePackageJSON(
   PackagePath: string,
   DataToWrite: string,
-  JsonFileName?: string
+  JsonFileName?: string,
+  createIfNoExists?: boolean
 ): Promise<{ success: boolean; result?: string }> {
   JsonFileName = JsonFileName || "package.json";
   const JSONPath = path.join(PackagePath, JsonFileName);
   const pathExists = fs.existsSync(JSONPath);
-  if (!pathExists) {
+  if (!pathExists && !createIfNoExists) {
     logreport.warn(`"${JSONPath}" does not exist in path.`);
     return { success: false, result: `"${JSONPath}" does not exist in path.` };
   }

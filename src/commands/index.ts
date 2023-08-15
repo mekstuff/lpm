@@ -25,7 +25,7 @@ import * as runrelease from "./run-release.js";
 
 import * as _import from "./import.js";
 
-import * as outdated from "./outdated.js";
+import * as autoupgrade from "./autoupgrade.js";
 
 import * as config from "./config.js";
 
@@ -47,7 +47,7 @@ const commands = {
   bulk,
   runrelease,
   _import,
-  outdated,
+  autoupgrade,
   config,
   upgrade,
 };

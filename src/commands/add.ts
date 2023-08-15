@@ -2,22 +2,17 @@
 //To fix might just need to have resolvepackaes run when installing, so it checks for imported packages of added packages.
 
 import fs from "fs";
-import chalk from "chalk";
 import logreport from "../utils/logreport.js";
 import pluralize from "pluralize";
 import { program as CommanderProgram } from "commander";
 import { SUPPORTED_PACKAGE_MANAGERS } from "../utils/CONSTANTS.js";
 import {
-  AddInstallationsToGlobalPackage,
   GenerateLockFileAtCwd,
   RequireFileChangeGenerateObj,
-  GetLPMPackagesJSON,
-  ReadLPMPackagesJSON,
   ReadLockFileFromCwd,
   ResolvePackageFromLPMJSON,
-  IAddInstallationsToGlobalPackage_Package,
   dependency_scope,
-  GetPackageFromLockFileByName,
+  ResolvePackageFromLPMJSONFromDirectory,
 } from "../utils/lpmfiles.js";
 import path from "path";
 import { execSync } from "child_process";
@@ -29,8 +24,24 @@ import {
   WritePackageJSON,
 } from "../utils/PackageReader.js";
 
-export function GetPreferredPackageManager(): SUPPORTED_PACKAGE_MANAGERS {
+import enqpkg from "enquirer";
+const { prompt } = enqpkg;
+
+export async function GetPreferredPackageManager(): Promise<SUPPORTED_PACKAGE_MANAGERS> {
   return "yarn";
+  return await prompt<{ pm: SUPPORTED_PACKAGE_MANAGERS }>({
+    name: "pm",
+    message: "Select a package manager",
+    choices: ["yarn", "npm", "pnpm"],
+    type: "select",
+  })
+    .then((e) => {
+      return e.pm;
+    })
+    .catch((err) => {
+      logreport.error(err);
+      process.exit(1);
+    });
 }
 export interface AddOptions {
   packageManager?: SUPPORTED_PACKAGE_MANAGERS;
@@ -41,6 +52,7 @@ export interface AddOptions {
   optional?: boolean;
   traverseImports?: boolean;
   preserveImport?: boolean;
+  lockVersion?: boolean;
 }
 
 /**
@@ -271,6 +283,20 @@ async function HandleInjectPackage(
     recursive: true,
     force: true,
   });
+  // we need to also update this package where every else the current package using it is installed.
+  // so if xd2 has xd installed. and xd3 has xd2 installed we need to inject xd in both xd2 and xd3.
+  const cwdPublished = await ResolvePackageFromLPMJSONFromDirectory(cwd);
+  if (cwdPublished) {
+    cwdPublished.Package.installations.map(async (x) => {
+      if (x.path === cwd) {
+        logreport.warn(
+          `${parsed.FullResolvedName} is published from ${cwd}. You tried to inject it here which will result in an infinite loop.`
+        );
+        return;
+      }
+      await HandleInjectPackage(x.path, Inject);
+    });
+  }
 }
 
 /**
@@ -312,11 +338,16 @@ export async function AddFilesFromLockData(
       `Injecting ${ToInject.length} ${pluralize(
         "dependency",
         ToInject.length
-      )}.`,
+      )}. ${ToInject.map((x) => x.name).join(",")}`,
       "log",
       true
     );
     for (const inject of ToInject) {
+      if (inject.requires_import === true && inject.install_type !== "import") {
+        logreport.error(
+          `${inject.name} is required to be imported. Could not inject.`
+        );
+      }
       await HandleInjectPackage(cwd, inject);
     }
     useSeal = await GenerateLocalCwdTreeSeal(cwd);
@@ -328,7 +359,7 @@ export async function AddFilesFromLockData(
       `Updating ${ToInstall.length} ${pluralize(
         "dependency",
         ToInstall.length
-      )}.`,
+      )}. ${ToInstall.map((x) => x.name).join(",")}`,
       "log",
       true
     );
@@ -343,10 +374,21 @@ export async function AddFilesFromLockData(
       );
       process.exit(1);
     }
+    // remove .yarn-integrity since it if xd2 had a package installed and removed it, when adding updating xd2 in xd, xd will keep
+    // the already removed package of xd2.
+    if (fs.existsSync(path.join(cwd, "node_modules", ".yarn-integrity"))) {
+      fs.rmSync(path.join(cwd, "node_modules", ".yarn-integrity"), {
+        force: true,
+        recursive: true,
+      });
+    }
     for (const i of ToInstall) {
       if (i.install_type !== "default") {
         //imports are handled through `ResolvePackagesFromTreeSeal`
         continue;
+      }
+      if (i.requires_import) {
+        logreport.error(`${i.name} is required to be imported.`);
       }
       const parsed = ParsePackageName(i.name);
       await RemovePackageNameFromDependencyScopes(
@@ -362,10 +404,13 @@ export async function AddFilesFromLockData(
     }
     await WritePackageJSON(cwd, JSON.stringify(cwdJSON.result, undefined, 2));
     try {
-      execSync(`${PackageManager}`, {
-        cwd: cwd,
-        stdio: log ? "inherit" : "ignore",
-      });
+      execSync(
+        `${PackageManager} ${PackageManager === "yarn" ? "" : "install"}`,
+        {
+          cwd: cwd,
+          stdio: log ? "inherit" : "ignore",
+        }
+      );
     } catch (err) {
       console.error(err);
       logreport.error(err);
@@ -380,6 +425,79 @@ export async function AddFilesFromLockData(
   }
 }
 
+async function AddPackagesToLocalPackageJSON(
+  cwd: string,
+  Packages: string[],
+  dependency_scope: dependency_scope
+) {
+  const PackageJSON = await ReadPackageJSON(cwd);
+  const l: PackageFile["local"] = {};
+  l[dependency_scope] = l[dependency_scope] || {};
+  Packages.map((x) => {
+    const s = x.split(" ");
+    const pn = ParsePackageName(s[0]);
+    if (!pn.FullPackageName || !pn.PackageVersion) {
+      logreport.error(`Failed to get package name or version. ${s[0]} => ${x}`);
+      process.exit(1);
+    }
+    //if @current is passed, keep all the current data, including import, version etc. basically do not change the package.json for package.
+    if (pn.PackageVersion === "current") {
+      return;
+    }
+    if (PackageJSON.success && typeof PackageJSON.result !== "string") {
+      const tl = PackageJSON.result.local;
+      if (tl) {
+        //remove from previous scope if listed.
+        if (tl["dependencies"]) {
+          tl["dependencies"][pn.FullPackageName] =
+            undefined as unknown as string;
+        }
+        if (tl["devDependencies"]) {
+          tl["devDependencies"][pn.FullPackageName] =
+            undefined as unknown as string;
+        }
+        if (tl["peerDependencies"]) {
+          tl["peerDependencies"][pn.FullPackageName] =
+            undefined as unknown as string;
+        }
+        if (tl["optionalDependencies"]) {
+          tl["optionalDependencies"][pn.FullPackageName] =
+            undefined as unknown as string;
+        }
+      }
+    }
+
+    //xd@latest = *, xd@!1.4.5 = xd@1.4.5, xd@1.4.5 = xd@^1.4.5
+    const opts = s.splice(1);
+    const _x = l[dependency_scope] || {};
+    _x[pn.FullPackageName] =
+      opts.length > 0 ? [pn.VersionWithSymbol, ...opts] : pn.VersionWithSymbol;
+    l[dependency_scope] = _x;
+  });
+  if (!PackageJSON.success || typeof PackageJSON.result === "string") {
+    await WritePackageJSON(
+      cwd,
+      JSON.stringify({ local: l }, undefined, 2),
+      undefined,
+      true
+    );
+    return;
+  } else {
+    PackageJSON.result.local = PackageJSON.result.local || {};
+    PackageJSON.result.local[dependency_scope] =
+      PackageJSON.result.local[dependency_scope] || {};
+
+    PackageJSON.result.local[dependency_scope] = {
+      ...PackageJSON.result.local[dependency_scope],
+      ...l[dependency_scope],
+    };
+
+    await WritePackageJSON(
+      cwd,
+      JSON.stringify(PackageJSON.result, undefined, 2)
+    );
+  }
+}
 export default class add {
   async Add(
     Arg0: string[],
@@ -394,7 +512,7 @@ export default class add {
       process.exit(1);
     }
     if (!Options.packageManager) {
-      Options.packageManager = GetPreferredPackageManager();
+      Options.packageManager = await GetPreferredPackageManager();
     }
     logreport.assert(
       SUPPORTED_PACKAGE_MANAGERS.indexOf(Options.packageManager as string) !==
@@ -403,142 +521,45 @@ export default class add {
     );
     const Packages: string[] = [];
     const PackageManagerFlags: string[] = [];
-    const AddToInstallationsData: IAddInstallationsToGlobalPackage_Package[] =
-      [];
-    Arg0.forEach((arg) => {
+    for (const arg of Arg0) {
       if (!arg.match("^-")) {
-        Packages.push(arg);
+        let str = arg;
+        const p = ParsePackageName(str);
+        //if we do add xd, then get the latest version of xd.
+        if (p.PackageVersion === "latest") {
+          try {
+            const f = await ResolvePackageFromLPMJSON(p.FullPackageName);
+            if (f) {
+              str = p.FullPackageName += "@" + f?.Parsed.PackageVersion;
+            }
+          } catch (err) {
+            logreport.error(err);
+          }
+        }
+        if (Options.import) {
+          str += " " + "import";
+        }
+        if (Options.traverseImports) {
+          str += " " + "traverse-imports";
+        }
+        Packages.push(str);
       } else {
         PackageManagerFlags.push(arg);
       }
-    });
-    const GlobalPkgsIndex = await ReadLPMPackagesJSON();
-    const LOCKFILE = await ReadLockFileFromCwd(
-      targetWorkingDirectory,
-      true,
-      true
-    );
-    for (const index in Packages) {
-      let pkg = Packages[index];
-      logreport.Elapse(
-        `Fetching package ${chalk.blue(pkg)} [${Number(index) + 1} / ${
-          Packages.length
-        }]...`,
-        "INSTALL_PKGS"
-      );
-      let KEEP_CURRENT_VERSION_WHEN_RESOLVE = false;
-      const InitialNameParse = ParsePackageName(pkg);
-      //if we are requiring latest, check if it's already installed and install latest relative to previously installed.
-      if (InitialNameParse.PackageVersion === "latest") {
-        if (LOCKFILE) {
-          for (const PKG in LOCKFILE.pkgs) {
-            // const t = LOCKFILE.pkgs[PKG];
-            const p = ParsePackageName(PKG);
-            if (p.FullPackageName === InitialNameParse.FullPackageName) {
-              //update the pkg string so when fetching it will use that @version instead of @latest.
-              //if version was @latest and no semver symbol is set, use ^
-              pkg = `${p.FullPackageName}@${LOCKFILE.pkgs[PKG].sem_ver_symbol}${p.PackageVersion}`;
-              break;
-            }
-          }
-        }
-      } else {
-        KEEP_CURRENT_VERSION_WHEN_RESOLVE = true;
-      }
-      const InGlobalIndex = await ResolvePackageFromLPMJSON(
-        pkg,
-        GlobalPkgsIndex,
-        KEEP_CURRENT_VERSION_WHEN_RESOLVE
-      );
-      if (!InGlobalIndex) {
-        logreport.error(
-          `"${pkg}" was not found within the local package registry.`
-        );
-        process.exit(1);
-      }
-      logreport.assert(
-        typeof InGlobalIndex.Package.resolve === "string",
-        `"${pkg}" Package does not have a valid resolve field in global index! ${await GetLPMPackagesJSON()}`
-      );
-      logreport.assert(
-        typeof InGlobalIndex.Package.installations === "object",
-        `"${pkg}" Package does not have a valid installations field in global index! ${await GetLPMPackagesJSON()}`
-      );
-      if (!Options.import && InGlobalIndex.Package.requires_import === true) {
-        logreport.error(
-          `"${pkg}" requires to be imported, try ${chalk.bold(
-            `lpm import ${pkg}`
-          )}`
-        );
-      }
-      //Add fetch package from lock file by name function to get old version.
-      const CURR_LOCK_FILE_DATA =
-        LOCKFILE &&
-        (await GetPackageFromLockFileByName(
-          InGlobalIndex.Parsed.FullPackageName,
-          targetWorkingDirectory,
-          LOCKFILE
-        ));
-      let FORCE_USE_DEPENDENCY_SCOPE: dependency_scope | undefined;
-      if (
-        CURR_LOCK_FILE_DATA &&
-        !Options.dev &&
-        !Options.optional &&
-        !Options.peer
-      ) {
-        //if none provided, use old install dep scope from lock file if exists.
-        FORCE_USE_DEPENDENCY_SCOPE = CURR_LOCK_FILE_DATA.dependency_scope;
-      }
-
-      //keep import and traverse state
-      if (CURR_LOCK_FILE_DATA) {
-        if (CURR_LOCK_FILE_DATA.traverse_imports === true) {
-          Options.traverseImports = true;
-        }
-        if (CURR_LOCK_FILE_DATA.install_type === "import") {
-          if (!Options.import) {
-            if (!Options.preserveImport) {
-              logreport.warn(
-                `${InGlobalIndex.Parsed.FullResolvedName} was previously imported but now is a default installation.`
-              );
-            } else {
-              logreport(
-                `Preserved import for ${InGlobalIndex.Parsed.FullResolvedName}`,
-                "log",
-                true
-              );
-              Options.import = true;
-            }
-          }
-        } else if (CURR_LOCK_FILE_DATA.install_type === "default") {
-          if (Options.import) {
-            logreport.warn(
-              `${InGlobalIndex.Parsed.FullResolvedName} was previously a default installation but is now imported.`
-            );
-          }
-        }
-      }
-      AddToInstallationsData.push({
-        packageName: InGlobalIndex.Parsed.FullSemVerResolvedName,
-        installInfo: {
-          path: targetWorkingDirectory,
-          install_type: Options.import ? "import" : "default",
-          traverse_imports: Options.traverseImports || false,
-          dependency_scope: FORCE_USE_DEPENDENCY_SCOPE
-            ? FORCE_USE_DEPENDENCY_SCOPE
-            : Options.dev
-            ? "devDependencies"
-            : Options.optional
-            ? "optionalDependencies"
-            : Options.peer
-            ? "peerDependencies"
-            : "dependencies",
-        },
-      });
     }
-    await AddInstallationsToGlobalPackage(AddToInstallationsData);
+    await AddPackagesToLocalPackageJSON(
+      targetWorkingDirectory,
+      Packages,
+      Options.dev
+        ? "devDependencies"
+        : Options.optional
+        ? "optionalDependencies"
+        : Options.peer
+        ? "peerDependencies"
+        : "dependencies"
+    );
     const { RequiresInstall, RequiresNode_Modules_Injection } =
-      await GenerateLockFileAtCwd(targetWorkingDirectory);
+      await GenerateLockFileAtCwd(targetWorkingDirectory, Options);
     await AddFilesFromLockData(
       Options.packageManager,
       Options.showPmLogs,
@@ -574,6 +595,10 @@ export default class add {
       .option(
         "--import [boolean]",
         "Adds the package to a .local-pm and install from local path, Useful for packages that aren't actually published to a registry."
+      )
+      .option(
+        "--lock-version [boolean]",
+        "If package@^1.4.5 is to be installed and package@1.4.6 exists, 1.4.6 will be selected by default. No version bump will force current installation to use @1.4.5. Done by tricking the LOCK file and have to package installed as @!1.4.5, but package.json will still be @^1.4.5, any other installations will resolve to @^1.4.5"
       )
       .action(async (packages, options) => {
         await this.Add(packages, options);

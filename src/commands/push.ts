@@ -54,7 +54,7 @@ export default class push {
       log: options.Log,
     });
     if (OLD_PUBLISH_SIG === NEW_PUBLISH_SIG && !options.force) {
-      logreport("Nothing changed.", "log", true);
+      logreport("Nothing changed." + cwd, "log", true);
       process.exit();
     }
 
@@ -97,7 +97,7 @@ export default class push {
       process.chdir(installation.path);
       logreport(`Pushing to: ${installation.path}`, "info", true);
       try {
-        await getcommand("add").Add([`${ParsedName.PackageName}`], {
+        await getcommand("add").Add([`${ParsedName.FullPackageName}`], {
           preserveImport: true,
         });
         await this.Push(installation.path, options, true);
@@ -110,7 +110,10 @@ export default class push {
     logreport.Elapse(
       `${chalk.green(
         `[${Total_Updated}/${TargetInstallationsList.length}]`
-      )} ${pluralize("package", Total_Updated)} successfully updated.`,
+      )} ${pluralize(
+        "package",
+        Total_Updated
+      )} successfully updated. ${OG_dir}`,
       "PUSH",
       true
     );
@@ -121,7 +124,7 @@ export default class push {
       .option("-log [boolean]", "Log command process.", false)
       .option(
         "-b, --bump",
-        "Bumping will go through all installed version of the package, not just the currently published version and will call pull. This does not mean all versions will update to this specific version, but instead update to their latest compatiable version. e.g ^1.2.4 => 1.3.0"
+        "Bumping will go through all installed version of the package, not just the currently published version. This does not mean all versions will update to this specific version, but instead update to their latest compatiable version. e.g ^1.2.4 => 1.3.0"
       )
       .option("--no-scripts [boolean]", "Does not run any scripts")
       .option(

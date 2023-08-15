@@ -5,11 +5,14 @@ import { GetPreferredPackageManager } from "./add.js";
 import logreport from "../utils/logreport.js";
 import { exec } from "child_process";
 import { BulkRemovePackagesFromLocalCwdStore } from "./add.js";
-import { ParsePackageName } from "../utils/PackageReader.js";
+import {
+  ParsePackageName,
+  ReadPackageJSON,
+  WritePackageJSON,
+} from "../utils/PackageReader.js";
 import {
   GenerateLockFileAtCwd,
   ReadLockFileFromCwd,
-  RemoveInstallationsFromGlobalPackage,
 } from "../utils/lpmfiles.js";
 
 interface RemoveOptions {
@@ -23,7 +26,7 @@ export default class remove {
   async Remove(Arg0: string[], Options: RemoveOptions) {
     const LOCKFILE = await ReadLockFileFromCwd();
     if (!Options.packageManager) {
-      Options.packageManager = GetPreferredPackageManager();
+      Options.packageManager = await GetPreferredPackageManager();
     }
     logreport.assert(
       SUPPORTED_PACKAGE_MANAGERS.indexOf(Options.packageManager as string) !==
@@ -32,6 +35,11 @@ export default class remove {
     );
     const Packages: string[] = [];
     const PackageManagerFlags: string[] = [];
+    const PackageJSON = await ReadPackageJSON(process.cwd());
+    if (!PackageJSON.success || typeof PackageJSON.result === "string") {
+      logreport.error(`No package.json found.`);
+      process.exit(1);
+    }
     //seperate the uninstall string packages since we can't include a @version when uninstall.
     const UNINSTALL_PKGS_STRBUILD: string[] = [];
     Arg0.forEach((arg) => {
@@ -72,22 +80,19 @@ export default class remove {
         }
       }
       Packages[index] = ParsedInfo.FullResolvedName;
+      if (
+        PackageJSON.result["local"] &&
+        PackageJSON.result["local"][
+          LOCKFILE.pkgs[ParsedInfo.FullResolvedName].dependency_scope
+        ]
+      ) {
+        PackageJSON.result["local"][
+          LOCKFILE.pkgs[ParsedInfo.FullResolvedName].dependency_scope
+        ] = undefined;
+      }
       //Set to package name since we don't need version
       UNINSTALL_PKGS_STRBUILD.push(ParsedInfo.FullPackageName);
     }
-    logreport.Elapse(`Removing from global installations...`, "REMOVE_PKGS");
-    try {
-      await RemoveInstallationsFromGlobalPackage(Packages, [process.cwd()]);
-    } catch (e) {
-      if (!Options.skipRegistryCheck) {
-        logreport.error(e);
-      }
-    }
-    logreport.Elapse(
-      `Finished removing from global installations`,
-      "REMOVE_PKGS"
-    );
-
     logreport.Elapse(
       `Removing from package manager ${chalk.blue(Options.packageManager)}...`,
       "REMOVE_PKGS"
@@ -133,6 +138,16 @@ export default class remove {
       "REMOVE_PKGS"
     );
     logreport.Elapse(`Generating LOCK file...`, "REMOVE_PKGS");
+    const np = await ReadPackageJSON(process.cwd());
+    if (!np.success || typeof np.result === "string") {
+      logreport.error(np.result);
+      process.exit(1);
+    }
+    np.result.local = PackageJSON.result.local;
+    await WritePackageJSON(
+      process.cwd(),
+      JSON.stringify(np.result, undefined, 2)
+    );
     await GenerateLockFileAtCwd();
     logreport.Elapse(`LOCK file Generated`, "REMOVE_PKGS", true);
     await BulkRemovePackagesFromLocalCwdStore(process.cwd(), Packages, true);
