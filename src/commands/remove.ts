@@ -26,11 +26,10 @@ export default class remove {
   async Remove(Arg0: string[], Options: RemoveOptions) {
     const LOCKFILE = await ReadLockFileFromCwd();
     if (!Options.packageManager) {
-      Options.packageManager = await GetPreferredPackageManager();
+      Options.packageManager = await GetPreferredPackageManager(process.cwd());
     }
     logreport.assert(
-      SUPPORTED_PACKAGE_MANAGERS.indexOf(Options.packageManager as string) !==
-        -1,
+      SUPPORTED_PACKAGE_MANAGERS.indexOf(Options.packageManager) !== -1,
       `Unsupported package manager "${Options.packageManager}"`
     );
     const Packages: string[] = [];

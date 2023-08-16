@@ -27,12 +27,25 @@ import {
 import enqpkg from "enquirer";
 const { prompt } = enqpkg;
 
-export async function GetPreferredPackageManager(): Promise<SUPPORTED_PACKAGE_MANAGERS> {
-  return "yarn";
+export async function GetPreferredPackageManager(
+  working_directory: string
+): Promise<SUPPORTED_PACKAGE_MANAGERS> {
+  const YARNLOCKPATH = path.join(working_directory, "yarn.lock");
+  const NPMLOCKPATH = path.join(working_directory, "package-lock.json");
+  const PNPMLOCK = path.join(working_directory, "pnpm-lock.yaml");
+  if (fs.existsSync(YARNLOCKPATH)) {
+    return "yarn";
+  } else if (fs.existsSync(NPMLOCKPATH)) {
+    return "npm";
+  } else if (fs.existsSync(PNPMLOCK)) {
+    return "pnpm";
+  }
   return await prompt<{ pm: SUPPORTED_PACKAGE_MANAGERS }>({
     name: "pm",
     message: "Select a package manager",
-    choices: ["yarn", "npm", "pnpm"],
+    choices: SUPPORTED_PACKAGE_MANAGERS.map((x) => {
+      return x;
+    }),
     type: "select",
   })
     .then((e) => {
@@ -512,11 +525,12 @@ export default class add {
       process.exit(1);
     }
     if (!Options.packageManager) {
-      Options.packageManager = await GetPreferredPackageManager();
+      Options.packageManager = await GetPreferredPackageManager(
+        targetWorkingDirectory
+      );
     }
     logreport.assert(
-      SUPPORTED_PACKAGE_MANAGERS.indexOf(Options.packageManager as string) !==
-        -1,
+      SUPPORTED_PACKAGE_MANAGERS.indexOf(Options.packageManager) !== -1,
       `Unsupported package manager "${Options.packageManager}"`
     );
     const Packages: string[] = [];
