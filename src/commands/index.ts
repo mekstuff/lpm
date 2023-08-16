@@ -5,7 +5,6 @@ import * as publish from "./publish.js";
 import * as unpublish from "./unpublish.js";
 
 import * as push from "./push.js";
-import * as pull from "./pull.js";
 
 import * as pack from "./pack.js";
 
@@ -37,7 +36,6 @@ const commands = {
   publish,
   unpublish,
   push,
-  pull,
   pack,
   open,
   list,
