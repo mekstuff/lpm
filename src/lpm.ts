@@ -32,7 +32,7 @@ program.action(async (Options: AddOptions) => {
     await GenerateLockFileAtCwd(process.cwd());
 
   await AddFilesFromLockData(
-    Options.packageManager || (await GetPreferredPackageManager()),
+    Options.packageManager || (await GetPreferredPackageManager(process.cwd())),
     Options.showPmLogs,
     process.cwd(),
     RequiresInstall,
