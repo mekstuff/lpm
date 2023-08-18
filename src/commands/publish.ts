@@ -1,6 +1,6 @@
 import path from "path";
 import tar from "tar";
-import logreport from "../utils/logreport.js";
+import { Console } from "@mekstuff/logreport";
 import { program as CommanderProgram } from "commander";
 import pack from "./pack.js";
 import { ParsePackageName, ReadPackageJSON } from "../utils/PackageReader.js";
@@ -30,18 +30,18 @@ export default class publish extends pack {
     packagePath = packagePath || process.cwd();
     const { success, result } = await ReadPackageJSON(packagePath);
     if (!success) {
-      logreport.error(result);
+      Console.error(result);
     }
     if (!result || typeof result === "string") {
-      return logreport.error(
+      return Console.error(
         "Something went wrong while publishing"
       ) as undefined;
     }
     if (!result.name) {
-      return logreport.error("Package must have a name to publish.");
+      return Console.error("Package must have a name to publish.");
     }
     if (!result.version) {
-      return logreport.error("Package must have a version to publish.");
+      return Console.error("Package must have a version to publish.");
     }
     const ParsedInfo = ParsePackageName(result.name, result.version);
     const LPMPackagesJSON = await ReadLPMPackagesJSON();
@@ -63,11 +63,11 @@ export default class publish extends pack {
           }
         })
         .catch((err) => {
-          logreport.error(err);
+          Console.error(err);
           process.exit(1);
         });
     }
-    logreport.Elapse(`Publishing ${ParsedInfo.FullResolvedName}`, "PUBLISH");
+    const PublishLog = Console.log(`Publishing ${ParsedInfo.FullResolvedName}`);
     runScriptsSync(packagePath, result, ["prepublishOnly"], Options.scripts);
 
     const PackageOutputPath = path.join(
@@ -90,11 +90,11 @@ export default class publish extends pack {
       [".lpm"]
     ).catch((err) => {
       console.error(err);
-      logreport.error("Failed to pack. " + err);
+      Console.error("Failed to pack. " + err);
     });
 
     if (!packRes) {
-      logreport.error("Failed to pack.");
+      Console.error("Failed to pack.");
       process.exit(1);
     }
 
@@ -109,7 +109,7 @@ export default class publish extends pack {
       },
     ]).then((added) => {
       if (!added) {
-        logreport(
+        Console.warn(
           `Could not add package to global json file! ${ParsedInfo.FullResolvedName} => ${packageinlpmdir}`
         );
       }
@@ -123,9 +123,9 @@ export default class publish extends pack {
       });
     } catch (err) {
       console.log(err);
-      logreport.error("Failed to publish " + err);
+      Console.error("Failed to publish " + err);
     }
-    logreport.EndElapse("PUBLISH");
+    PublishLog(`Published`);
     return packRes.pack_signature;
   }
   build(program: typeof CommanderProgram) {

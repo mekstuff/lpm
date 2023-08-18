@@ -1,4 +1,4 @@
-import logreport from "../utils/logreport.js";
+import { Console } from "@mekstuff/logreport";
 import { program as CommanderProgram } from "commander";
 import pack from "./pack.js";
 import { ParsePackageName, ReadPackageJSON } from "../utils/PackageReader.js";
@@ -14,23 +14,23 @@ export default class unpublish extends pack {
     packagePath = packagePath || ".";
     const { success, result } = await ReadPackageJSON(packagePath);
     if (!success) {
-      logreport.error(result);
+      Console.error(result);
     }
     if (!result || typeof result === "string") {
-      return logreport.error("Something went wrong while packing") as undefined;
+      return Console.error("Something went wrong while packing") as undefined;
     }
     if (!result.name) {
-      return logreport.error("Package must have a name to unpublish.");
+      return Console.error("Package must have a name to unpublish.");
     }
     if (!result.version) {
-      return logreport.error("Package must have a version to unpublish.");
+      return Console.error("Package must have a version to unpublish.");
     }
     const ParsedInfo = ParsePackageName(result.name, result.version);
 
-    logreport.Elapse(
-      `Unpublishing ${ParsedInfo.FullResolvedName}`,
-      "UNPUBLISH"
+    const UnpublishLog = Console.log(
+      `Unpublishing ${ParsedInfo.FullResolvedName}`
     );
+    UnpublishLog(`Unpublishing ${ParsedInfo.FullResolvedName}`);
     const PackageOutputPath = path.join(
       ParsedInfo.FullPackageName,
       ParsedInfo.PackageVersion
@@ -46,7 +46,7 @@ export default class unpublish extends pack {
       true
     ).then((removed) => {
       if (!removed) {
-        logreport(
+        Console.warn(
           `Could not remove package to global json file! ${ParsedInfo.FullResolvedName} => ${PackageOutputPath}`
         );
       }
@@ -54,7 +54,7 @@ export default class unpublish extends pack {
     try {
       const Removed = await RemoveLPMPackageDirectory(PackageOutputPath);
       if (!Removed) {
-        logreport(
+        Console.warn(
           `Failed to remove package file from global installation "${
             ParsedInfo.FullResolvedName
           }".\n\nYou can manually delete it from here\n${path.join(
@@ -64,10 +64,10 @@ export default class unpublish extends pack {
         );
       }
     } catch (err) {
-      logreport.error("Failed to publish " + err);
+      Console.error("Failed to unpublish " + err);
     }
 
-    logreport.EndElapse("UNPUBLISH");
+    UnpublishLog("Package unpublished.");
   }
 
   /*

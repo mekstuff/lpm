@@ -2,20 +2,16 @@ import path from "path";
 import chokidar from "chokidar";
 import { program as CommanderProgram } from "commander";
 import { GetLPMPackagesDirectory } from "../utils/lpmfiles.js";
-import LogReport from "@mekstuff/logreport";
+import { Console } from "@mekstuff/logreport";
 import { execSync } from "child_process";
 
 export default class autoupgrade {
   async Autoupgrade(packages: string[], options: { command?: string }) {
     if (packages.length === 0) {
-      LogReport.error(`Need atleast 1 package to watch.`);
+      Console.error(`Need atleast 1 package to watch.`);
       process.exit(1);
     }
-    LogReport(
-      `Auto upgrading ${packages.join(",")} when published.`,
-      "log",
-      true
-    );
+    Console.log(`Auto upgrading ${packages.join(",")} when published.`);
     const PackagesDir = await GetLPMPackagesDirectory();
     const RootDebounces: Map<string, number> = new Map();
     chokidar
@@ -44,7 +40,7 @@ export default class autoupgrade {
           } else {
             RootDebounces.set(rootTrigger, new Date().getTime());
           }
-          LogReport(`Upgrading ${rootTrigger}`, "log", true);
+          Console.log(`Upgrading ${rootTrigger}`);
           execSync(`lpm`, { stdio: "inherit" });
           if (options.command) {
             execSync(options.command, { stdio: "inherit" });

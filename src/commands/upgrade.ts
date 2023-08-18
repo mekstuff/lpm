@@ -1,5 +1,5 @@
-import LogReport from "@mekstuff/logreport";
 import semver from "semver";
+import { Console } from "@mekstuff/logreport";
 import { program as CommanderProgram } from "commander";
 import {
   ILPMPackagesJSON,
@@ -36,7 +36,7 @@ export default class upgrade {
     );
     const InVersionTree = LPMPackages.version_tree[Parsed.FullPackageName];
     if (!InVersionTree) {
-      LogReport.error(
+      Console.error(
         `Could not find ${Parsed.FullPackageName} in version tree.`
       );
       process.exit(1);
@@ -52,7 +52,7 @@ export default class upgrade {
       const LatestPublishedVersion = await ResolvePackageFromLPMJSON(
         `${Parsed.FullPackageName}@${Latest}`
       );
-      LogReport(
+      Console.info(
         `${ShowDiffChalk(
           Parsed.FullResolvedName,
           Parsed.PackageVersion === Latest
@@ -62,9 +62,7 @@ export default class upgrade {
             LatestPublishedVersion?.Package.publish_sig
         )} => ${chalk.greenBright(
           `${LatestPublishedVersion?.Parsed.FullResolvedName} | ${LatestPublishedVersion?.Package.publish_sig}`
-        )}`,
-        "info",
-        true
+        )}`
       );
       return;
     }
@@ -109,7 +107,7 @@ export default class upgrade {
     })
       .then(async (res) => {
         if (res.nv === "skip") {
-          return;
+          process.exit();
         }
         const str = `${Parsed.FullPackageName}@${Parsed.SemVersionSymbol}${res.nv}`;
         if (returnRequests) {
@@ -122,7 +120,7 @@ export default class upgrade {
         });
       })
       .catch((err) => {
-        LogReport.error(err);
+        Console.error(err);
       });
   }
   async Upgrade(
@@ -153,7 +151,7 @@ export default class upgrade {
         }
       }
       const pkg = LOCK.pkgs[pkgName];
-      LogReport(`(${chalk.underline(cwd)})`, "log", true);
+      Console.log(`(${chalk.underline(cwd)})`);
       await this.RunUpgrade(
         pkgName,
         pkg,
@@ -174,7 +172,7 @@ export default class upgrade {
         cwd
       );
     } else {
-      LogReport("Nothing to upgrade.", "log", true);
+      Console.log("Nothing to upgrade.");
     }
   }
   build(program: typeof CommanderProgram) {

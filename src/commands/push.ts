@@ -1,6 +1,6 @@
 import chalk from "chalk";
-import logreport from "../utils/logreport.js";
 import pluralize from "pluralize";
+import { Console } from "@mekstuff/logreport";
 import { program as CommanderProgram } from "commander";
 import { ParsePackageName, ReadPackageJSON } from "../utils/PackageReader.js";
 import {
@@ -26,12 +26,12 @@ export default class push {
     }
     const PackageJSON = await ReadPackageJSON(cwd);
     if (!PackageJSON.success || typeof PackageJSON.result === "string") {
-      logreport.error("Could not read package. => " + PackageJSON.result);
+      Console.error("Could not read package. => " + PackageJSON.result);
       process.exit(1);
     }
     const name = PackageJSON.result.name;
     if (!name) {
-      logreport.error("Package does not have a name.");
+      Console.error("Package does not have a name.");
       process.exit(1);
     }
 
@@ -43,7 +43,7 @@ export default class push {
       if (CaptureNotPublished) {
         return;
       }
-      logreport.error(`${name} is not published.`);
+      Console.error(`${name} is not published.`);
       process.exit(1);
     }
 
@@ -54,7 +54,7 @@ export default class push {
       log: options.Log,
     });
     if (OLD_PUBLISH_SIG === NEW_PUBLISH_SIG && !options.force) {
-      logreport("Nothing changed." + cwd, "log", true);
+      Console.log("Nothing changed." + cwd);
       process.exit();
     }
 
@@ -64,7 +64,7 @@ export default class push {
       const PublishedVersions =
         LPMPackagesJSON.version_tree[ParsedName.FullPackageName];
       if (!PublishedVersions) {
-        logreport.error(
+        Console.error(
           `Could not resolved published version of ${ParsedName.FullPackageName} in version tree.`
         );
         process.exit(1);
@@ -73,7 +73,7 @@ export default class push {
         const tn = `${ParsedName.PackageName}@${v}`;
         const t = LPMPackagesJSON.packages[tn];
         if (!t) {
-          logreport.warn(
+          Console.warn(
             `${tn} does not exist in packages but was found in version tree, Skipping`
           );
           continue;
@@ -86,16 +86,15 @@ export default class push {
     } else {
       TargetInstallationsList = pkg.installations;
     }
-    logreport.Elapse(
+    const PushLog = Console.log(
       `${chalk.green(name)} is installed in ${chalk.green(
         TargetInstallationsList.length
-      )} ${pluralize("directory", TargetInstallationsList.length)}...`,
-      "PUSH"
+      )} ${pluralize("directory", TargetInstallationsList.length)}...`
     );
     const OG_dir = process.cwd();
     for (const installation of TargetInstallationsList) {
       process.chdir(installation.path);
-      logreport(`Pushing to: ${installation.path}`, "info", true);
+      PushLog(`Pushing to: ${installation.path}`);
       try {
         await getcommand("add").Add([`${ParsedName.FullPackageName}`], {
           preserveImport: true,
@@ -103,19 +102,14 @@ export default class push {
         await this.Push(installation.path, options, true);
         Total_Updated++;
       } catch (e) {
-        logreport.warn(`Failed to push on dir "${installation.path}". ${e}`);
+        Console.warn(`Failed to push on dir "${installation.path}". ${e}`);
       }
     }
     process.chdir(OG_dir);
-    logreport.Elapse(
+    PushLog(
       `${chalk.green(
         `[${Total_Updated}/${TargetInstallationsList.length}]`
-      )} ${pluralize(
-        "package",
-        Total_Updated
-      )} successfully updated. ${OG_dir}`,
-      "PUSH",
-      true
+      )} ${pluralize("package", Total_Updated)} successfully updated. ${OG_dir}`
     );
   }
   build(program: typeof CommanderProgram) {

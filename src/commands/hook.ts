@@ -1,11 +1,10 @@
 import fs from "fs";
 import path from "path";
-import { program as CommanderProgram } from "commander";
-import logreport from "../utils/logreport.js";
 import enqpkg from "enquirer";
 import chalk from "chalk";
 const { prompt } = enqpkg;
-
+import { Console } from "@mekstuff/logreport";
+import { program as CommanderProgram } from "commander";
 export default class hook {
   gitdir = path.join(process.cwd(), ".git");
   githooksdir = path.join(this.gitdir, "hooks");
@@ -14,7 +13,7 @@ export default class hook {
   MustHaveGitInitialized() {
     const gitdirExists = fs.existsSync(this.gitdir);
     if (!gitdirExists) {
-      logreport.warn(
+      Console.warn(
         "git is not initialized in the current directory, cannot hook. run `git init` first."
       );
 
@@ -26,7 +25,7 @@ export default class hook {
     try {
       this.MustHaveGitInitialized();
       if (!fs.existsSync(this.gitprepushhookdir)) {
-        logreport.warn(
+        Console.warn(
           "no `pre-push` hook was found.\n" +
             path.relative(process.cwd(), this.gitprepushhookdir)
         );
@@ -41,20 +40,20 @@ export default class hook {
       });
       if (e.confirm_proceed === true) {
         fs.rmSync(this.gitprepushhookdir);
-        logreport("git unhooked 👍", "log", true);
+        Console.info("git unhooked 👍");
       }
     } catch (err) {
-      logreport.warn("Something went wrong when trying to unhook git " + err);
+      Console.warn("Something went wrong when trying to unhook git " + err);
     }
   }
   async hookregistry() {
-    logreport(
+    Console.log(
       "\nAdd the following source to your package.json 'prepublishOnly' script file\n\n" +
         chalk.gray("lpm prepare safe-production")
     );
   }
   async hookgit() {
-    logreport(
+    Console.log(
       "\nAdd the following source to your .git/hooks/pre-push || .git/hooks/pre-push.sample (Will need to remove .sample ext) file\n\n" +
         GIT_PRE_PUSH_SOURCE
     );

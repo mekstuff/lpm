@@ -1,5 +1,5 @@
 import { program as CommanderProgram } from "commander";
-import logreport from "../utils/logreport.js";
+import { Console } from "@mekstuff/logreport";
 import {
   GetLPMPackagesDirectory,
   GetLPMPackagesJSON,
@@ -12,12 +12,12 @@ type OPEN_REQST = (typeof OPEN_REQS)[number];
 export default class open {
   async OpenLPMJSON() {
     const LPMJSONPath = await GetLPMPackagesJSON();
-    logreport(LPMJSONPath, "log", true);
+    Console.log(LPMJSONPath);
     execSync(`start "" "${LPMJSONPath}"`);
   }
   async OpenLPMPackages() {
     const LPMPackagesDirectory = await GetLPMPackagesDirectory();
-    logreport(LPMPackagesDirectory, "log", true);
+    Console.log(LPMPackagesDirectory);
     execSync(`start "" "${LPMPackagesDirectory}"`);
   }
   async Open(target: OPEN_REQST) {
@@ -29,7 +29,7 @@ export default class open {
         await this.OpenLPMPackages();
         return;
       default:
-        logreport.error(
+        Console.error(
           `Unknown open request "${target}". Try: ${OPEN_REQS.join(",")}`
         );
     }

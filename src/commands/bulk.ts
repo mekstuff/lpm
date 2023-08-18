@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import enqpkg from "enquirer";
-import logreport from "../utils/logreport.js";
+import { Console } from "@mekstuff/logreport";
 import { program as CommanderProgram } from "commander";
 import { execSync } from "child_process";
 const { prompt } = enqpkg;
@@ -17,19 +17,16 @@ export default class Bulk {
     whitelist: string | undefined,
     options: bulkOptions
   ) {
-    logreport.assert(
-      typeof directory === "string",
-      "directory must be a string"
-    );
-    logreport.assert(typeof command === "string", "directory must be a string");
+    Console.assert(typeof directory === "string", "directory must be a string");
+    Console.assert(typeof command === "string", "directory must be a string");
     if (whitelist) {
-      logreport.assert(
+      Console.assert(
         typeof whitelist === "string",
         "whitelist must be a string"
       );
     }
     if (!fs.statSync(directory).isDirectory()) {
-      logreport.error(directory + " is not a directory.");
+      Console.error(directory + " is not a directory.");
       process.exit(1);
     }
     for (const child of fs.readdirSync(directory)) {
@@ -41,7 +38,7 @@ export default class Bulk {
           initial: command,
         });
         if (res.Verify === "false" || res.Verify === "n") {
-          logreport("Skipping => " + child);
+          Console.log("Skipping => " + child);
           continue;
         } else {
           command = res.Verify;

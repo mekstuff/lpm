@@ -2,7 +2,7 @@ import chalk from "chalk";
 import { program as CommanderProgram } from "commander";
 import { SUPPORTED_PACKAGE_MANAGERS } from "../utils/CONSTANTS.js";
 import { GetPreferredPackageManager } from "./add.js";
-import logreport from "../utils/logreport.js";
+import { Console } from "@mekstuff/logreport";
 import { exec } from "child_process";
 import { BulkRemovePackagesFromLocalCwdStore } from "./add.js";
 import {
@@ -28,7 +28,7 @@ export default class remove {
     if (!Options.packageManager) {
       Options.packageManager = await GetPreferredPackageManager(process.cwd());
     }
-    logreport.assert(
+    Console.assert(
       SUPPORTED_PACKAGE_MANAGERS.indexOf(Options.packageManager) !== -1,
       `Unsupported package manager "${Options.packageManager}"`
     );
@@ -36,7 +36,7 @@ export default class remove {
     const PackageManagerFlags: string[] = [];
     const PackageJSON = await ReadPackageJSON(process.cwd());
     if (!PackageJSON.success || typeof PackageJSON.result === "string") {
-      logreport.error(`No package.json found.`);
+      Console.error(`No package.json found.`);
       process.exit(1);
     }
     //seperate the uninstall string packages since we can't include a @version when uninstall.
@@ -48,9 +48,8 @@ export default class remove {
         PackageManagerFlags.push(arg);
       }
     });
-    logreport.Elapse(
-      `Removing ${Packages.length} package${Packages.length === 1 ? "" : "s"}.`,
-      "REMOVE_PKGS"
+    const RemoveLog = Console.log(
+      `Removing ${Packages.length} package${Packages.length === 1 ? "" : "s"}.`
     );
     for (const index in Packages) {
       const pkg = Packages[index];
@@ -64,15 +63,14 @@ export default class remove {
           }
         }
       }
-      logreport.Elapse(
+      RemoveLog(
         `Fetching package ${chalk.blue(ParsedInfo.FullResolvedName)} [${
           Number(index) + 1
-        } / ${Packages.length}]...`,
-        "REMOVE_PKGS"
+        } / ${Packages.length}]...`
       );
       if (!Options.skipLockCheck) {
         if (!LOCKFILE.pkgs[ParsedInfo.FullResolvedName]) {
-          logreport.error(
+          Console.error(
             pkg +
               " was not found in lock file. use `--skip-lock-check` to ignore this check."
           );
@@ -92,9 +90,8 @@ export default class remove {
       //Set to package name since we don't need version
       UNINSTALL_PKGS_STRBUILD.push(ParsedInfo.FullPackageName);
     }
-    logreport.Elapse(
-      `Removing from package manager ${chalk.blue(Options.packageManager)}...`,
-      "REMOVE_PKGS"
+    RemoveLog(
+      `Removing from package manager ${chalk.blue(Options.packageManager)}...`
     );
 
     const execString =
@@ -103,7 +100,7 @@ export default class remove {
       UNINSTALL_PKGS_STRBUILD.join(" ") +
       PackageManagerFlags.join(" ");
 
-    logreport(`Executing "${execString}"`, "VERBOSE");
+    Console.VERBOSE(`Executing "${execString}"`);
     const p = new Promise<number | null>((resolve) => {
       const executed = exec(execString);
       executed.on("exit", (code) => {
@@ -114,7 +111,7 @@ export default class remove {
       }
       executed.stdout?.on("data", (data) => {
         if (Options.showPmLogs) {
-          logreport(
+          Console.LOG(
             data.toString(),
             "log",
             chalk.blue(Options.packageManager?.toUpperCase() + " INFO ")
@@ -123,7 +120,7 @@ export default class remove {
       });
       executed.stderr?.on("data", (data) => {
         if (Options.showPmLogs) {
-          logreport(
+          Console.LOG(
             data.toString(),
             "log",
             chalk.blue(Options.packageManager?.toUpperCase() + " INFO ")
@@ -131,15 +128,10 @@ export default class remove {
         }
       });
     });
-    logreport(`Exit Code "${await p}"`, "VERBOSE");
-    logreport.Elapse(
-      `Removed from package manager with exit code ${await p}`,
-      "REMOVE_PKGS"
-    );
-    logreport.Elapse(`Generating LOCK file...`, "REMOVE_PKGS");
+    Console.VERBOSE(`Exit Code "${await p}"`);
     const np = await ReadPackageJSON(process.cwd());
     if (!np.success || typeof np.result === "string") {
-      logreport.error(np.result);
+      Console.error(np.result);
       process.exit(1);
     }
     np.result.local = PackageJSON.result.local;
@@ -148,7 +140,6 @@ export default class remove {
       JSON.stringify(np.result, undefined, 2)
     );
     await GenerateLockFileAtCwd();
-    logreport.Elapse(`LOCK file Generated`, "REMOVE_PKGS", true);
     await BulkRemovePackagesFromLocalCwdStore(process.cwd(), Packages, true);
   }
   build(program: typeof CommanderProgram) {

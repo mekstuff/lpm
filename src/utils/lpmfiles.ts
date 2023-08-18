@@ -2,7 +2,6 @@ import os from "os";
 import path from "path";
 import fs from "fs";
 import crypto from "crypto";
-import logreport from "./logreport.js";
 import pluralize from "pluralize";
 import { BackUpLPMPackagesJSON } from "../commands/backup.js";
 import {
@@ -15,6 +14,7 @@ import {
 import enqpkg from "enquirer";
 import { getcommand } from "../lpm.js";
 import { AddOptions } from "../commands/add.js";
+import { Console } from "@mekstuff/logreport";
 const { prompt } = enqpkg;
 
 /**
@@ -54,7 +54,7 @@ export async function CreateLPMPackageDirectory(
       fs.rmSync(dir, { recursive: true });
     }
   } catch (err) {
-    logreport.error(err);
+    Console.error(err);
   }
   await fs.promises
     .mkdir(dir, {
@@ -62,11 +62,11 @@ export async function CreateLPMPackageDirectory(
     })
     .then(() => {
       fs.promises.mkdir(path.join(dir, "pkg")).catch((err) => {
-        logreport.error(err);
+        Console.error(err);
       });
     })
     .catch((err) => {
-      logreport.error(err);
+      Console.error(err);
     });
   return dir;
 }
@@ -85,7 +85,7 @@ export async function RemoveLPMPackageDirectory(
       return true;
     }
   } catch (err) {
-    logreport.error(err);
+    Console.error(err);
   }
   return false;
 }
@@ -95,7 +95,7 @@ export async function RemoveLPMPackageDirectory(
  */
 export async function GetLPMPackagesDirectory(): Promise<string> {
   const d = await GetLPMDirectory().catch((e) => {
-    logreport.error(e);
+    Console.error(e);
   });
   const LPM_PACKAGES_DIR = path.join(d as string, "packages");
   try {
@@ -104,11 +104,11 @@ export async function GetLPMPackagesDirectory(): Promise<string> {
       await fs.promises
         .mkdir(LPM_PACKAGES_DIR, { recursive: true })
         .catch((e) => {
-          logreport.error(e);
+          Console.error(e);
         });
     }
   } catch (e) {
-    logreport.error(e);
+    Console.error(e);
   }
   return LPM_PACKAGES_DIR;
 }
@@ -121,11 +121,11 @@ export async function GetLPMDirectory(): Promise<string> {
     const LPM_DIRExists = fs.existsSync(LPM_DIR);
     if (!LPM_DIRExists) {
       await fs.promises.mkdir(LPM_DIR, { recursive: true }).catch((e) => {
-        logreport.error(e);
+        Console.error(e);
       });
     }
   } catch (e) {
-    logreport.error(e);
+    Console.error(e);
   }
   return LPM_DIR;
 }
@@ -145,11 +145,11 @@ export async function GetLPMPackagesJSON(): Promise<string> {
       await fs.promises
         .writeFile(PackagesJSONPath, JSON.stringify(default_data), "utf8")
         .catch((e) => {
-          logreport.error(e);
+          Console.error(e);
         });
     }
   } catch (e) {
-    logreport.error(e);
+    Console.error(e);
   }
   return PackagesJSONPath;
 }
@@ -199,7 +199,7 @@ export async function ResolvePackageFromLPMJSON(
 
   const INFO = LPMPackagesJSON.version_tree[Parsed.FullPackageName];
   if (!INFO) {
-    logreport.warn(
+    Console.warn(
       `"${PackageName}" => "${Parsed.FullPackageName}" was not found in the version tree.`
     );
     return undefined;
@@ -213,7 +213,7 @@ export async function ResolvePackageFromLPMJSON(
   }
 
   if (!HighestVersion) {
-    logreport.warn(
+    Console.warn(
       `"${PackageName}" => "${Parsed.FullPackageName}" Could not resolve latest version from version tree.`
     );
     return undefined;
@@ -252,12 +252,12 @@ export async function ReadLPMPackagesJSON(): Promise<ILPMPackagesJSON> {
       fs.readFileSync(LPMPackagesJSON, "utf8")
     );
     if (!Data.packages) {
-      logreport.error(CorruptedGlobalRegistryJSONFileWarn);
+      Console.error(CorruptedGlobalRegistryJSONFileWarn);
     }
     LPMPackagesJSON_Memory = Data;
     return Data;
   } catch (e) {
-    logreport.error(`${e} => ` + CorruptedGlobalRegistryJSONFileWarn);
+    Console.error(`${e} => ` + CorruptedGlobalRegistryJSONFileWarn);
   }
   LPMPackagesJSON_Memory = {} as ILPMPackagesJSON;
   return LPMPackagesJSON_Memory;
@@ -270,7 +270,7 @@ export async function WriteLPMPackagesJSON(
   Data: string | ILPMPackagesJSON,
   options?: BufferEncoding
 ): Promise<boolean> {
-  logreport.assert(
+  Console.assert(
     Data !== undefined,
     "Did not get any data to write to LPM Packages JSON."
   );
@@ -287,7 +287,7 @@ export async function WriteLPMPackagesJSON(
     );
     wrote = true;
   } catch (e) {
-    logreport.warn(e);
+    Console.warn(e);
     wrote = false;
   }
   return wrote;
@@ -343,7 +343,7 @@ export async function AddPackagesToLPMJSON(
     requires_import?: boolean;
   }[]
 ): Promise<boolean> {
-  logreport.assert(typeof Packages === "object", "Invalid Packages passed.");
+  Console.assert(typeof Packages === "object", "Invalid Packages passed.");
   try {
     const LPMPackagesJSON = await ReadLPMPackagesJSON();
     for (const pkg of Packages) {
@@ -366,10 +366,10 @@ export async function AddPackagesToLPMJSON(
     }
     const wrote = await WriteLPMPackagesJSON(LPMPackagesJSON);
     if (!wrote) {
-      logreport("Failed to write to LPM Packages.", "error");
+      Console.error("Failed to write to LPM Packages.");
     }
   } catch (e) {
-    logreport.error(e);
+    Console.error(e);
   }
   return true;
 }
@@ -381,7 +381,7 @@ export async function RemovePackagesFromLPMJSON(
   Packages: { name: string; version: string }[],
   promptVerifyPackagesWithInstalls?: boolean
 ): Promise<boolean> {
-  logreport.assert(typeof Packages === "object", "Invalid Packages passed.");
+  Console.assert(typeof Packages === "object", "Invalid Packages passed.");
   try {
     const LPMPackagesJSON = await ReadLPMPackagesJSON();
     for (const pkg of Packages) {
@@ -435,7 +435,7 @@ export async function RemovePackagesFromLPMJSON(
               }
             })
             .catch((err) => {
-              logreport.error(err);
+              Console.error(err);
               process.exit(1);
             });
         }
@@ -452,21 +452,17 @@ export async function RemovePackagesFromLPMJSON(
           }
         }
       } else {
-        logreport(
-          `${ParsedInfo.FullResolvedName} is not published.`,
-          "warn",
-          true
-        );
+        Console.warn(`${ParsedInfo.FullResolvedName} is not published.`);
       }
       /*
        */
     }
     const wrote = WriteLPMPackagesJSON(LPMPackagesJSON);
     if (!wrote) {
-      logreport("Failed to write to LPM Packages.", "error");
+      Console.error("Failed to write to LPM Packages.");
     }
   } catch (e) {
-    logreport.error(e);
+    Console.error(e);
   }
   return true;
 }
@@ -493,7 +489,7 @@ export async function AddInstallationsToGlobalPackage(
       const PublishedVersions =
         LPMPackagesJSON.version_tree[ParsedInfo.FullPackageName];
       if (!PublishedVersions) {
-        logreport.error(
+        Console.error(
           `${ParsedInfo.FullResolvedName} could not resolve a version from @latest. Make sure the package is published.`
         );
         process.exit(1);
@@ -501,7 +497,7 @@ export async function AddInstallationsToGlobalPackage(
 
       const HighestVersion = await GetHighestVersion(PublishedVersions);
       if (HighestVersion === null) {
-        logreport.error(
+        Console.error(
           `${ParsedInfo.FullResolvedName} could not resolve a version from @latest. The package seemed to be published incorrectly.`
         );
         process.exit(1);
@@ -513,15 +509,14 @@ export async function AddInstallationsToGlobalPackage(
     }
     const TargetPackage = LPMPackagesJSON.packages[ParsedInfo.FullResolvedName];
     if (!TargetPackage) {
-      logreport.error(
+      Console.error(
         `${ParsedInfo.FullResolvedName} was not found in the local package registry.`
       );
     }
     let OldInstallationData = TargetPackage.installations;
     if (!OldInstallationData) {
-      logreport(
-        `No Installations was found on package ${ParsedInfo.FullResolvedName}. Check backups to find previous installations of this package.`,
-        "warn"
+      Console.warn(
+        `No Installations was found on package ${ParsedInfo.FullResolvedName}. Check backups to find previous installations of this package.`
       );
       OldInstallationData = [];
     }
@@ -577,7 +572,7 @@ export async function RemoveInstallationsFromGlobalPackage(
   packageNames.forEach((packageName) => {
     const TargetPackage = LPMPackagesJSON.packages[packageName];
     if (!TargetPackage) {
-      logreport.error(
+      Console.error(
         `${packageName} was not found in the local package registry.`,
         true
       );
@@ -639,17 +634,15 @@ export async function ReadLockFileFromCwd(
         return undefined as unknown as LOCKFILE;
       }
       if (warnNoExist) {
-        logreport.warn(`No lock file exists in ${path.resolve(cwd)}.`);
+        Console.warn(`No lock file exists in ${path.resolve(cwd)}.`);
         return undefined as unknown as LOCKFILE;
       } else {
-        logreport.error(`No lock file exists in ${path.resolve(cwd)}.`);
+        Console.error(`No lock file exists in ${path.resolve(cwd)}.`);
       }
     }
     return JSON.parse(fs.readFileSync(path.join(cwd, "lpm.lock"), "utf8"));
   } catch (e) {
-    logreport.error(
-      `Could not read lock file ${path.resolve(cwd, "lpm.lock")}.`
-    );
+    Console.error(`Could not read lock file ${path.resolve(cwd, "lpm.lock")}.`);
   }
   return {} as LOCKFILE;
 }
@@ -674,7 +667,7 @@ export async function AddLockFileToCwd(cwd?: string, data?: LOCKFILE) {
       }
     }
   } catch (e) {
-    logreport.error("Could not create lock file " + cwd);
+    Console.error("Could not create lock file " + cwd);
   }
 }
 
@@ -723,9 +716,12 @@ export async function GenerateLockFileAtCwd(
   let RequiresNode_Modules_Injection: RequireFileChangeGenerateObj[] = [];
   cwd = cwd || process.cwd();
 
+  const GeneratingLockProgress = Console.progress.bar();
+  GeneratingLockProgress(5, "Generating LOCK");
+
   const PackageJSON = await ReadPackageJSON(cwd);
   if (!PackageJSON.success || typeof PackageJSON.result === "string") {
-    logreport.error(PackageJSON.result);
+    Console.error(PackageJSON.result);
     process.exit(1);
   }
 
@@ -761,13 +757,13 @@ export async function GenerateLockFileAtCwd(
         t.options = v.splice(1);
       }
       if (typeof t.name !== "string") {
-        logreport.error(
+        Console.error(
           `No package name provided, got ${t.name} ${typeof t.name}`
         );
         process.exit(1);
       }
       if (typeof t.version !== "string") {
-        logreport.error(
+        Console.error(
           `Invalid package version provided, got ${
             t.version
           } ${typeof t.version}`
@@ -788,7 +784,7 @@ export async function GenerateLockFileAtCwd(
         // true
       );
       if (!PublishedPackage) {
-        logreport.error(
+        Console.error(
           `${Parsed.FullResolvedName} is not published or could not be resolved.`
         );
         process.exit(1);
@@ -861,9 +857,13 @@ export async function GenerateLockFileAtCwd(
       LOCK.pkgs[PublishedPackage.Parsed.FullResolvedName] = f;
     }
   };
+  GeneratingLockProgress(10, "Loading dependencies");
   await inScope(PackageJSON.result.local.dependencies, "dependencies");
+  GeneratingLockProgress(20, "Loading devDependencies");
   await inScope(PackageJSON.result.local.devDependencies, "devDependencies");
+  GeneratingLockProgress(30, "Loading peerDependencies");
   await inScope(PackageJSON.result.local.peerDependencies, "peerDependencies");
+  GeneratingLockProgress(40, "Loading optionalDependencies");
   await inScope(
     PackageJSON.result.local.optionalDependencies,
     "optionalDependencies"
@@ -895,10 +895,11 @@ export async function GenerateLockFileAtCwd(
     }
   );
 
+  GeneratingLockProgress(70, "Adding LOCK file to cwd.");
   await AddLockFileToCwd(cwd, LOCK);
   //updating installations globally.
   if (!HAD_OLD_LOCK) {
-    logreport(`Generating new LOCK file from scratch.`, "log", true);
+    Console.log(`Generating new LOCK file from scratch.`);
     const p = [];
     const lpj = await ReadLPMPackagesJSON();
     for (const x in lpj.packages) {
@@ -916,12 +917,14 @@ export async function GenerateLockFileAtCwd(
       }
     }
   }
+  GeneratingLockProgress(90, "Storing Globally");
   for (const i in LOCK.pkgs) {
     // const v = LOCK.pkgs[i];
     await AddInstallationsToGlobalPackage([
       { packageName: i, installInfo: { path: cwd } },
     ]);
   }
+  GeneratingLockProgress(100, "LOCK File Generated.");
   return {
     RequiresInstall: RequiresInstall,
     RequiresNode_Modules_Injection: RequiresNode_Modules_Injection,

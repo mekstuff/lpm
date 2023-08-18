@@ -58,10 +58,17 @@
   resolved "https://registry.yarnpkg.com/@humanwhocodes/object-schema/-/object-schema-1.2.1.tgz#b520529ec21d8e5945a1851dfd1c32e94e39ff45"
   integrity sha512-ZnQMnLV4e7hDlUvw8H+U8ASL02SS2Gn6+9Ac3wGGLIe7+je2AeAOxPY+izIPJDfFDb7eDjev0Us8MO1iFRN8hA==
 
-"@mekstuff/logreport@file:.lpm/@mekstuff/logreport@1.0.0--cb491340bb-ef91c3":
+"@mekstuff/logreport@file:../../../../.local-package-manager/packages/@mekstuff/logreport/1.0.0/pkg":
   version "1.0.0"
   dependencies:
     chalk "4.1.0"
+    draftlog "1.0.13"
+
+"@mekstuff/logreport@file:C:\\\\Users\\\\Lanzo\\\\.local-package-manager\\\\packages\\\\@mekstuff\\\\logreport\\\\1.0.0\\\\pkg":
+  version "1.0.0"
+  dependencies:
+    chalk "4.1.0"
+    draftlog "1.0.13"
 
 "@nodelib/fs.scandir@2.1.5":
   version "2.1.5"
@@ -393,6 +400,11 @@ doctrine@^3.0.0:
   integrity sha512-yS+Q5i3hBf7GBkd4KG8a7eBNNWNGLTaEwwYWUijIYM7zrlYDM0BFXHjjPWlWZ1Rg7UaddZeIDmi9jF3HmqiQ2w==
   dependencies:
     esutils "^2.0.2"
+
+draftlog@1.0.13:
+  version "1.0.13"
+  resolved "https://registry.yarnpkg.com/draftlog/-/draftlog-1.0.13.tgz#2a415783955dbc6e2bb3b51a93c3d559f26b453d"
+  integrity sha512-GeMWOpXERBpfVDK6v7m0x1hPg8+g8ZsZWqJl2T17wHqrm4h8fnjiZmXcnCrmwogAc6R3YTxFXax15wezfuyCUw==
 
 enquirer@^2.3.6:
   version "2.3.6"

@@ -1,4 +1,4 @@
-import LogReport from "@mekstuff/logreport";
+import { Console } from "@mekstuff/logreport";
 import { PackageFile } from "./PackageReader.js";
 import { execSync } from "child_process";
 
@@ -16,16 +16,17 @@ export default function runScriptsSync(
   if (!packageJSON.scripts) {
     return;
   }
+  const ScriptRunningLog = Console.log(`Running scripts...`);
   for (const x of targetScripts) {
     if (packageJSON.scripts[x]) {
-      LogReport(`Running "${packageJSON.name}" => "${x}"`, "log", true);
+      ScriptRunningLog(`Running "${packageJSON.name}" => "${x}"`);
       try {
         execSync(packageJSON.scripts[x], {
           cwd: path,
           stdio: "inherit",
         });
       } catch (err) {
-        LogReport.error(`Failed on run script "${x}".`);
+        Console.error(`Failed on run script "${x}".`);
       }
     }
   }

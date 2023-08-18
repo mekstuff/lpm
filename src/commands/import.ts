@@ -1,6 +1,6 @@
-import logreport from "../utils/logreport.js";
-import { program as CommanderProgram } from "commander";
 import pluralize from "pluralize";
+import { Console } from "@mekstuff/logreport";
+import { program as CommanderProgram } from "commander";
 import { SUPPORTED_PACKAGE_MANAGERS } from "../utils/CONSTANTS.js";
 import { getcommand } from "../lpm.js";
 
@@ -15,7 +15,7 @@ export default class IMPORT {
       optional?: boolean;
     }
   ) {
-    logreport.Elapse(
+    Console.log(
       `Importing ${Packages.length} ${pluralize("package", Packages.length)}`,
       "IMPORT"
     );

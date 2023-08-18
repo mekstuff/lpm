@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
-import logreport from "./logreport.js";
 import semver from "semver";
+import { Console } from "@mekstuff/logreport";
 
 interface PackageFileRequired {
   name: string;
@@ -118,7 +118,7 @@ export async function ReadPackageJSON(
   const JSONPath = path.join(PackagePath, JsonFileName);
   const pathExists = fs.existsSync(JSONPath);
   if (!pathExists && !CreateOnNonExist) {
-    logreport.warn(`"${JSONPath}" does not exist in path.`);
+    Console.warn(`"${JSONPath}" does not exist in path.`);
     return { success: false, result: `"${JSONPath}" does not exist in path.` };
   }
   if (!pathExists && CreateOnNonExist) {
@@ -130,7 +130,7 @@ export async function ReadPackageJSON(
         result: write,
       };
     } catch (err) {
-      logreport.error(
+      Console.error(
         "Could not create package json file => " + JSONPath + ". Error: " + err
       );
       process.exit(1);
@@ -143,7 +143,7 @@ export async function ReadPackageJSON(
       result: JSON.parse(value.toString()) as PackageFile,
     };
   } catch (e) {
-    logreport.warn(e);
+    Console.warn(e);
     return { success: false, result: e as string };
   }
 }
@@ -158,14 +158,14 @@ export async function WritePackageJSON(
   const JSONPath = path.join(PackagePath, JsonFileName);
   const pathExists = fs.existsSync(JSONPath);
   if (!pathExists && !createIfNoExists) {
-    logreport.warn(`"${JSONPath}" does not exist in path.`);
+    Console.warn(`"${JSONPath}" does not exist in path.`);
     return { success: false, result: `"${JSONPath}" does not exist in path.` };
   }
   try {
     fs.writeFileSync(JSONPath, DataToWrite, { encoding: "utf8" });
     return { success: true };
   } catch (e) {
-    logreport.warn(e);
+    Console.warn(e);
     return { success: false, result: e as string };
   }
 }

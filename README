@@ -1,11 +1,377 @@
-## Preserving symlinks
+<!-- PROJECT LOGO -->
 
-It may be required to use preserve symlinks for some programs to work properly. For e.g with typescript you may need to pass the
-`--preserveSymlink` flag or with node `--preserve-symlinks` && `preserve-symlinks-main`.
+<br />
 
-For executing symlink binaries, `lpm` automatically changes the source file to have these preserve links flags so you don't have to worry about that. But for cases for external tools like `typescript`, you need to manually pass these flags.
+<div  align="center">
 
-Common programs with preserve flag
+<a  href="https://github.com/othneildrew/Best-README-Template">
 
-`node --preserve-symlinks --preserve-symlinks-main ...`
-`npx tsc --preserveSymlinks ...`
+<img  src="images/logo.png"  alt="Logo"  width="80"  height="80">
+
+</a>
+
+<h3  align="center">Local Package Manager</h3>
+
+<p  align="center">
+
+For locally developing/testing/publishing your npm packages.
+
+<br />
+
+<a  href="https://github.com/othneildrew/Best-README-Template"><strong>Explore the docs »</strong></a>
+
+<br />
+
+<br />
+
+<a  href="https://github.com/othneildrew/Best-README-Template">View Demo</a>
+
+·
+
+<a  href="https://github.com/othneildrew/Best-README-Template/issues">Report Bug</a>
+
+·
+
+<a  href="https://github.com/othneildrew/Best-README-Template/issues">Request Feature</a>
+
+</p>
+
+</div>
+
+## About The Project
+
+[![Product Name Screen Shot][product-screenshot]](https://example.com)
+
+When testing your npm packages, you may try to use the `link` command of package managers, e.g `yarn link` `npm link`, However `link` may provided unwanted results like;
+
+- Files in `.gitignore`/`.npmignore`/`package.json->files` aren't respected. This is because link only creates a symbolic link between package directory and the working directory.
+
+- Dependencies/Dependencies of dependencies not being installed.
+
+a current solution [yalc](https://github.com/wclr/yalc) aims to fix these problems, but I have personally experienced some unwanted behavior with it, hence I created `lpm` to solve these problems and implement features that I expected from `yalc`
+
+What lpm provides:
+
+- `lpm` provides a way to have a local-registry on your machine, similarly to `npm publish`, `lpm publish` will pack your package, run any related `scripts` and upload it locally instead of a live registry. You can then `install`/`import` these published locally published packages across your device.
+
+- A way to quickly go from a locally published package to live.
+
+- Similar syntax to existing package managers
+
+## Getting Started
+
+### Prerequisites
+
+Make sure you have `lpm` installed globally.
+
+```sh
+npm  install  mekstuff@lpm  -g
+```
+
+## Usage
+
+### Publishing
+
+To publish a package run `lpm publish` in the directory of the package.
+
+> use the `no-scripts` flag to publish without running scripts.
+
+> use the `requires-import` flag to signify the package can only be installed through importing, learn about [importing]() here.
+
+Your package will be published at `~/.local-package-mananger/packages`
+
+### Installing
+
+There's `two` ways to install packages to your project, `adding` and `importing`
+
+#### Adding packages
+
+You can add a package by either using the cli or adding it to your `package.json` file.
+
+Just like `yarn`/`npm`, `lpm` has `dependencies, devDependencies, optionalDependencies, peerDependencies`. But unlike the traditional package manager where you specify at "root" level of your package.json, `lpm` packages are specified under a field called `local`.
+
+```json
+"name": "@mekstuff/lpm",
+"version": "1.0.0",
+"local": {
+	"dependencies": {
+		"@fake/dependency": "^1.4.5"
+	}
+}
+```
+
+> You could also get the same result by using the cli:
+> `lpm add @fake/dependency@1.4.5`
+
+#### Importing packages
+
+An imported package is a package that will be pulled into the working directory. Unlike adding, where the installed package points to the published copy of the package, imported packages are pointed to the local directory store, this means that your package will have its own copy of the published package.
+
+```json
+"name": "@mekstuff/lpm",
+"version": "1.0.0",
+"local": {
+	"dependencies": {
+		"@fake/dependency": ["^1.4.5", "import"]
+	}
+}
+```
+
+> You could also get the same result by using the cli:
+> `lpm import @fake/dependency@1.4.5` ||
+> `lpm add @fake/dependency@1.4.5 --import`
+
+You may use imported packages when the said package is not published to a live registry, and you plan release the current package to the public. Since said package will not be accessible to anyone, import makes a copy of it which will be apart of the current package.
+
+e.g.
+
+> `Package A `is published locally, `Package B` uses `Package A` but you want to publish `Package B` to a remote registry (npm registry). `Package A` will be imported and 'become' apart of the actual `Package B` bundle, so even without `Package A`being published, people who install `Package B` will have access to `Package A` through its imported copy.
+
+##### Traversing imports
+
+Traversing imports is a way to make sure that every dependent package is also imported, in the example above, Imagine if `Package A` also had a unpublished dependency of `Package C`, to make sure `Package C` is also imported for out `Package B` package, use the `--traverse-imports` flag.
+
+### Uninstalling package
+
+`lpm remove example` removes the package, no matter how it was installed.
+
+### Upgrading packages
+
+```sh
+lpm upgrade [packageName]
+```
+
+Creates an interactive prompt for upgrading currently installed packages or the specified package if provided.
+
+### How packages are resolved
+
+`lpm add example@1.3.5` => `example@^1.3.5`
+
+`lpm add example@^1.3.5` => `example@^1.3.5`
+
+`lpm add example@!1.3.5` => `example@1.3.5`
+
+`lpm add example@~1.3.5` => `example@~1.3.5`
+
+`lpm add example@latest` => `example@[latest-published-version]`
+
+You can also use `@current` when trying to update existing packages, this will preserve the current status of the package, for e.g. if it were previously imported and you were to run `lpm add example`, it will switch from an imported package to a normal installation. `lpm add example@current` keeps it as an imported package and makes any required updates.
+
+### Adding flags to package.json
+
+If you want to import a package by adding it to the `package.json` file, you will need to use an `array` for the package instead of a `string` of the version
+
+> "example": "1.3.5" -> "@example": ["1.3.5"]
+
+The first element must be the version. You can then add the flag (currently only `import` & `traverse-imports` are supported) in any order following the version.
+
+> "@example": ["1.3.5", "import", "traverse-imports"]
+
+### Configuring
+
+```sh
+lpm config
+```
+
+Prompts interactive configuration.
+
+### Preparing
+
+### Releasing
+
+### Hooking git
+
+### Backups
+
+<p  align="right">(<a  href="#readme-top">back to top</a>)</p>
+
+<!-- ROADMAP -->
+
+## Roadmap
+
+- [x] Add Changelog
+
+- [x] Add back to top links
+
+- [ ] Add Additional Templates w/ Examples
+
+- [ ] Add "components" document to easily copy & paste sections of the readme
+
+- [ ] Multi-language Support
+
+- [ ] Chinese
+
+- [ ] Spanish
+
+See the [open issues](https://github.com/othneildrew/Best-README-Template/issues) for a full list of proposed features (and known issues).
+
+<p  align="right">(<a  href="#readme-top">back to top</a>)</p>
+
+<!-- CONTRIBUTING -->
+
+## Contributing
+
+Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+
+If you have a suggestion that would make this better, please fork the repo and create a pull request. You can also simply open an issue with the tag "enhancement".
+
+Don't forget to give the project a star! Thanks again!
+
+1. Fork the Project
+
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+
+5. Open a Pull Request
+
+<p  align="right">(<a  href="#readme-top">back to top</a>)</p>
+
+<!-- LICENSE -->
+
+## License
+
+Distributed under the MIT License. See `LICENSE.txt` for more information.
+
+<p  align="right">(<a  href="#readme-top">back to top</a>)</p>
+
+<!-- CONTACT -->
+
+## Contact
+
+Your Name - [@your_twitter](https://twitter.com/your_username) - email@example.com
+
+Project Link: [https://github.com/your_username/repo_name](https://github.com/your_username/repo_name)
+
+<p  align="right">(<a  href="#readme-top">back to top</a>)</p>
+
+<!-- ACKNOWLEDGMENTS -->
+
+## Acknowledgments
+
+Use this space to list resources you find helpful and would like to give credit to. I've included a few of my favorites to kick things off!
+
+- [Choose an Open Source License](https://choosealicense.com)
+
+- [GitHub Emoji Cheat Sheet](https://www.webpagefx.com/tools/emoji-cheat-sheet)
+
+- [Malven's Flexbox Cheatsheet](https://flexbox.malven.co/)
+
+- [Malven's Grid Cheatsheet](https://grid.malven.co/)
+
+- [Img Shields](https://shields.io)
+
+- [GitHub Pages](https://pages.github.com)
+
+- [Font Awesome](https://fontawesome.com)
+
+- [React Icons](https://react-icons.github.io/react-icons/search)
+
+<p  align="right">(<a  href="#readme-top">back to top</a>)</p>
+
+<!-- MARKDOWN LINKS & IMAGES -->
+
+<!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
+
+[contributors-shield]: https://img.shields.io/github/contributors/othneildrew/Best-README-Template.svg?style=for-the-badge
+[contributors-url]: https://github.com/othneildrew/Best-README-Template/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/othneildrew/Best-README-Template.svg?style=for-the-badge
+[forks-url]: https://github.com/othneildrew/Best-README-Template/network/members
+[stars-shield]: https://img.shields.io/github/stars/othneildrew/Best-README-Template.svg?style=for-the-badge
+[stars-url]: https://github.com/othneildrew/Best-README-Template/stargazers
+[issues-shield]: https://img.shields.io/github/issues/othneildrew/Best-README-Template.svg?style=for-the-badge
+[issues-url]: https://github.com/othneildrew/Best-README-Template/issues
+[license-shield]: https://img.shields.io/github/license/othneildrew/Best-README-Template.svg?style=for-the-badge
+[license-url]: https://github.com/othneildrew/Best-README-Template/blob/master/LICENSE.txt
+[linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
+[linkedin-url]: https://linkedin.com/in/othneildrew
+[product-screenshot]: images/screenshot.png
+[Next.js]: https://img.shields.io/badge/next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white
+[Next-url]: https://nextjs.org/
+[React.js]: https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB
+[React-url]: https://reactjs.org/
+[Vue.js]: https://img.shields.io/badge/Vue.js-35495E?style=for-the-badge&logo=vuedotjs&logoColor=4FC08D
+[Vue-url]: https://vuejs.org/
+[Angular.io]: https://img.shields.io/badge/Angular-DD0031?style=for-the-badge&logo=angular&logoColor=white
+[Angular-url]: https://angular.io/
+[Svelte.dev]: https://img.shields.io/badge/Svelte-4A4A55?style=for-the-badge&logo=svelte&logoColor=FF3E00
+[Svelte-url]: https://svelte.dev/
+[Laravel.com]: https://img.shields.io/badge/Laravel-FF2D20?style=for-the-badge&logo=laravel&logoColor=white
+[Laravel-url]: https://laravel.com
+[Bootstrap.com]: https://img.shields.io/badge/Bootstrap-563D7C?style=for-the-badge&logo=bootstrap&logoColor=white
+[Bootstrap-url]: https://getbootstrap.com
+[JQuery.com]: https://img.shields.io/badge/jQuery-0769AD?style=for-the-badge&logo=jquery&logoColor=white
+
+[JQuery-url]: https://jquery.com<!-- PROJECT LOGO -->
+
+<br />
+
+<div  align="center">
+
+<a  href="https://github.com/othneildrew/Best-README-Template">
+
+<img  src="images/logo.png"  alt="Logo"  width="80"  height="80">
+
+</a>
+
+<h3  align="center">Local Package Manager</h3>
+
+<p  align="center">
+
+For locally developing/testing/publishing your npm packages.
+
+<br />
+
+<a  href="https://github.com/othneildrew/Best-README-Template"><strong>Explore the docs »</strong></a>
+
+<br />
+
+<br />
+
+<a  href="https://github.com/othneildrew/Best-README-Template">View Demo</a>
+
+·
+
+<a  href="https://github.com/othneildrew/Best-README-Template/issues">Report Bug</a>
+
+·
+
+<a  href="https://github.com/othneildrew/Best-README-Template/issues">Request Feature</a>
+
+</p>
+
+</div>
+
+## About The Project
+
+[![Product Name Screen Shot][product-screenshot]](https://example.com)
+
+When testing your npm packages, you may try to use the `link` command of package managers, e.g `yarn link` `npm link`, However `link` may provided unwanted results like;
+
+- Files in `.gitignore`/`.npmignore`/`package.json->files` aren't respected. This is because link only creates a symbolic link between package directory and the working directory.
+
+- Dependencies/Dependencies of dependencies not being installed.
+
+[yalc](https://github.com/wclr/yalc) aimed to fix these problems, but I have personally experienced some unwanted behaviour with it, hence I created lpm to solve these problems and implement features that I expected from `yalc`
+
+What lpm provides:
+
+- `lpm` provides a way to have a local-registry on your machine, similarly to `npm publish`, `lpm publish` will pack your package, run any related `scripts` and upload it locally instead of a live registry. You can then `install`/`import` these published locally published packages across your device.
+
+- A way to quickly go from a locally published package to live.
+
+- Similar syntax to existing package managers
+
+## Getting Started
+
+### Prerequisites
+
+Make sure you have `lpm` installed globally.
+
+```sh
+
+npm  install  mekstuff@lpm  -g
+
+```

@@ -8,7 +8,7 @@ import {
   CreateTemporaryFolder,
   GetLPMPackagesDirectory,
 } from "../utils/lpmfiles.js";
-import logreport from "../utils/logreport.js";
+import { Console } from "@mekstuff/logreport";
 import { PackageFile, ReadPackageJSON } from "../utils/PackageReader.js";
 import chalk from "chalk";
 import { execSync } from "child_process";
@@ -24,7 +24,7 @@ export default class runrelease {
     const LPMPackageDirectory = await GetLPMPackagesDirectory();
     const targetScopePath = path.join(LPMPackageDirectory, scope);
     if (!fs.existsSync(targetScopePath)) {
-      logreport.error(
+      Console.error(
         `Could not resolve scope "${scope}". The path does not exist => "${targetScopePath}"`
       );
       return;
@@ -40,10 +40,10 @@ export default class runrelease {
         };
       }),
     }).catch((e) => {
-      logreport.error(e);
+      Console.error(e);
       process.exit(1);
     });
-    logreport("Verifying packages...", "log", true);
+    const VerifyingLog = Console.log(`Verifying packages...`);
     const pubinfo: {
       packagejson: PackageFile;
       tarbal: string;
@@ -73,11 +73,11 @@ export default class runrelease {
           path: tpath,
         });
       } catch (e) {
-        logreport.error(`Something wen't wrong with package "${x}". => ${e}`);
+        Console.error(`Something wen't wrong with package "${x}". => ${e}`);
         process.exit(1);
       }
     }
-    logreport(
+    VerifyingLog(
       pubinfo.length + "/" + res.items.length + " packages verified.",
       "log",
       true
@@ -105,7 +105,7 @@ export default class runrelease {
       message: "Command to execute",
       initial: options.command,
     }).catch((e) => {
-      logreport.error(e);
+      Console.error(e);
       process.exit(1);
     });
     const temp = await CreateTemporaryFolder();
@@ -167,10 +167,10 @@ export default class runrelease {
       } catch (e) {
         const err = `Failed to execute "${commandprompt.cmd}" on ${x.packagejson.name}. => ${e}`;
         if (options.warnErrors) {
-          logreport(err, "warn", true);
+          Console.warn(err);
         } else {
           temp.done();
-          logreport.error(err);
+          Console.error(err);
           process.exit(1);
         }
       }

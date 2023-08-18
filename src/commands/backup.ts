@@ -12,9 +12,9 @@ import {
   GetLPMPackagesJSON,
   ReadLPMPackagesJSON,
 } from "../utils/lpmfiles.js";
-import logreport from "../utils/logreport.js";
 import { ReadPackageJSON } from "../utils/PackageReader.js";
 import { RequiresLPMConfigSet } from "../utils/lpmconfig.js";
+import { Console } from "@mekstuff/logreport";
 
 export async function GetLPMInstallationBackupDir() {
   return path.join(await GetLPMDirectory(), "installation-backups");
@@ -28,7 +28,7 @@ export async function GetLPMInstallationsBackup() {
     }
     return fs.readFileSync(dir, "utf8");
   } catch (e) {
-    logreport.error("Failed To Get Backups => " + e);
+    Console.error("Failed To Get Backups => " + e);
   }
 }
 
@@ -53,11 +53,7 @@ export async function BackUpLPMPackagesJSON(noLogs?: boolean) {
 
     fs.writeFileSync(FinalDir, JSON.stringify(JSON_Package, null, 2));
     if (!noLogs) {
-      logreport(
-        "Wrote new backup file => " + FinalDir,
-        "log",
-        chalk.green("BACKUP: ")
-      );
+      Console.info("Wrote new backup file => " + FinalDir);
     }
     fs.readdirSync(backupsDirectoryPath).forEach((backupfile) => {
       const backupfilePath = path.join(backupsDirectoryPath, backupfile);
@@ -66,20 +62,14 @@ export async function BackUpLPMPackagesJSON(noLogs?: boolean) {
           const oldBackFilestr = fs.readFileSync(backupfilePath, "utf8");
           if (oldBackFilestr === JSON_STR) {
             if (!noLogs) {
-              logreport(
-                `Removing backupfile '${backupfile}'.`,
-                "log",
-                chalk.yellow("BACKUP: ")
-              );
+              Console.warn(`Removing backupfile '${backupfile}'.`);
             }
             fs.rmSync(backupfilePath);
           }
         } catch (e) {
           if (!noLogs) {
-            logreport.warn(
-              "Failed to work with previous backupfile => " + backupfilePath,
-              undefined,
-              chalk.red("BACKUP: ")
+            Console.warn(
+              "Failed to work with previous backupfile => " + backupfilePath
             );
           }
         }
@@ -104,7 +94,7 @@ export async function BackUpLPMPackagesJSON(noLogs?: boolean) {
         });
     }
   } catch (e) {
-    logreport.warn("Something wen't wrong with backing up => " + e);
+    Console.warn("Something wen't wrong with backing up => " + e);
   }
 }
 
@@ -124,7 +114,7 @@ export default class backup {
     backup_program.command("revert").action(async () => {
       try {
         const Dir = await GetLPMInstallationBackupDir();
-        logreport("Backups located at: " + Dir, "log", true);
+        Console.info("Backups located at: " + Dir, "log", true);
         const Backups: { message: string; name: string }[] = [];
         for (const Backup of fs.readdirSync(Dir)) {
           const stats = fs.statSync(path.join(Dir, Backup));
@@ -148,22 +138,22 @@ export default class backup {
             x.file
           );
           if (R.success === false) {
-            logreport.error("Failed to read backup file " + R.result);
+            Console.error("Failed to read backup file " + R.result);
           }
           if (typeof R.result === "string") {
-            return logreport.error("Something went wrong.");
+            return Console.error("Something went wrong.");
           }
           fs.writeFileSync(
             await GetLPMPackagesJSON(),
             JSON.stringify(R.result, undefined, 2),
             { encoding: "utf8" }
           );
-          logreport(
+          Console.log(
             "Reverted to backed up file => " + (await GetLPMPackagesJSON())
           );
         });
       } catch (err) {
-        logreport("Failed to revert to backup => " + err);
+        Console.log("Failed to revert to backup => " + err);
       }
     });
   }

@@ -1,13 +1,11 @@
+const require = createRequire(import.meta.url);
 import fs from "fs";
 import path from "path";
-// import enqpkg from "enquirer";
-// const { prompt } = enqpkg;
+import chalk from "chalk";
 import { createRequire } from "module";
-const require = createRequire(import.meta.url);
 const { Form } = require("enquirer");
 import { GetLPMDirectory } from "./lpmfiles.js";
-import LogReport from "@mekstuff/logreport";
-import chalk from "chalk";
+import { Console } from "@mekstuff/logreport";
 
 const ILPMConfigData = {
   ["maximum-local-pkgs-backups"]: "10",
@@ -40,7 +38,7 @@ export async function RequiresLPMConfigSet(
   }
   if (requiredbutnotset.length > 0) {
     if (i === 2) {
-      LogReport.error(
+      Console.error(
         `${requiredbutnotset.join()} is required to be configured.`
       );
     }
@@ -82,6 +80,6 @@ export async function PromptSetLPMConfig(
       fs.writeFileSync(ConfigDir, JSON.stringify(x, undefined, 2));
     })
     .catch((err: unknown) => {
-      LogReport.warn(err);
+      Console.warn(err);
     });
 }

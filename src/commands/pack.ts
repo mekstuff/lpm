@@ -2,8 +2,8 @@ import fs from "fs";
 import path from "path";
 import tar from "tar";
 import crypto from "crypto";
-import logreport from "../utils/logreport.js";
 import runScriptsSync from "../utils/run-scripts.js";
+import { Console } from "@mekstuff/logreport";
 import { program as CommanderProgram } from "commander";
 import { ReadPackageJSON } from "../utils/PackageReader.js";
 interface PackOptions {
@@ -49,8 +49,8 @@ async function GetPackageFiles(
   IGNORE?: string[],
   INCLUDE?: string[]
 ) {
-  logreport.assert(PackagePath !== undefined, "Package Path Not Passed.");
-  logreport.assert(packageJson !== undefined, "Package JSON Not Passed.");
+  Console.assert(PackagePath !== undefined, "Package Path Not Passed.");
+  Console.assert(packageJson !== undefined, "Package JSON Not Passed.");
 
   /**
    * We must include `lpm.lock` for when we do lpm run-release it will make sure all packages are set to versions instead of link paths.
@@ -119,7 +119,7 @@ async function GetPackageFiles(
     });
   } else {
     const dir = await fs.promises.readdir(PackagePath).catch((e) => {
-      logreport.error(e);
+      Console.error(e);
     });
     Object.entries(dir as []).forEach((f) => {
       const d = f[1];
@@ -150,21 +150,21 @@ export default class pack {
     // logreport.Elapse(`Fetching Information "${packagePath}"...`, "PACK");
     const { success, result } = await ReadPackageJSON(packagePath);
     if (!success) {
-      logreport.error(result);
+      Console.error(result);
     }
     if (!result || typeof result === "string") {
-      return logreport.error("Something went wrong while packing") as undefined;
+      return Console.error("Something went wrong while packing") as undefined;
     }
     runScriptsSync(packagePath, result, ["prepack"], Options.scripts);
     Options.out = Options.out || `${result.name}-v${result.version}.tgz`;
-    logreport.Elapse(`Packaging "${result.name}"...`, "PACK");
+    const PackLog = Console.log(`Packaging "${result.name}"...`);
     const MapPack = await GetPackageFiles(
       packagePath,
       result,
       IGNORE,
       INCLUDE
     ).catch((err) => {
-      logreport.error("Could not get files to pack " + err);
+      Console.error("Could not get files to pack " + err);
     });
     let HASH = "";
     let PACKAGE_HASH: string | undefined;
@@ -191,13 +191,13 @@ export default class pack {
           Pack
         );
       } catch (e) {
-        logreport.error("Could not create tar file " + e);
+        Console.error("Could not create tar file " + e);
       }
     } else {
-      logreport.error("Did not get files to pack.");
+      Console.error("Did not get files to pack.");
     }
     if (!PACKAGE_HASH) {
-      logreport.error("Could not retrieve package hash.");
+      Console.error("Could not retrieve package hash.");
       process.exit(1);
     }
     PACKAGE_HASH += await HashPackageManagerLock(packagePath); //We also hash the lock file from the package manager. This detects changes within dependencies of dependencies.
@@ -212,7 +212,7 @@ export default class pack {
         .update(PACKAGE_HASH)
         .digest("hex"); //we has the package.json and append to the pack_signature so we can detect changes in package.json
     const outpath = path.resolve(Options.out);
-    logreport.Elapse(`Packaged => "${outpath}"`, "PACK", true);
+    PackLog(`Packaged => "${outpath}"`);
     return { outpath, pack_signature };
   }
   build(program: typeof CommanderProgram) {

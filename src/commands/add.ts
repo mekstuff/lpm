@@ -2,8 +2,8 @@
 //To fix might just need to have resolvepackaes run when installing, so it checks for imported packages of added packages.
 
 import fs from "fs";
-import logreport from "../utils/logreport.js";
 import pluralize from "pluralize";
+import { Console } from "@mekstuff/logreport";
 import { program as CommanderProgram } from "commander";
 import { SUPPORTED_PACKAGE_MANAGERS } from "../utils/CONSTANTS.js";
 import {
@@ -15,7 +15,7 @@ import {
   ResolvePackageFromLPMJSONFromDirectory,
 } from "../utils/lpmfiles.js";
 import path from "path";
-import { execSync } from "child_process";
+import { exec } from "child_process";
 
 import {
   PackageFile,
@@ -25,6 +25,7 @@ import {
 } from "../utils/PackageReader.js";
 
 import enqpkg from "enquirer";
+import chalk from "chalk";
 const { prompt } = enqpkg;
 
 export async function GetPreferredPackageManager(
@@ -52,7 +53,7 @@ export async function GetPreferredPackageManager(
       return e.pm;
     })
     .catch((err) => {
-      logreport.error(err);
+      Console.error(err);
       process.exit(1);
     });
 }
@@ -106,7 +107,7 @@ async function RemovePackageFromLocalCwdStore(
     }
   } catch (err) {
     if (!noErrors) {
-      logreport.error(
+      Console.error(
         "Could not remove package from => " +
           path.join(cwd_lpm_path, ParsedInfo.FullResolvedName)
       );
@@ -302,7 +303,7 @@ async function HandleInjectPackage(
   if (cwdPublished) {
     cwdPublished.Package.installations.map(async (x) => {
       if (x.path === cwd) {
-        logreport.warn(
+        Console.warn(
           `${parsed.FullResolvedName} is published from ${cwd}. You tried to inject it here which will result in an infinite loop.`
         );
         return;
@@ -347,34 +348,34 @@ export async function AddFilesFromLockData(
   let useSeal: TreeSealArray | undefined;
   let MUST_RESOLVE_PACKAGES_FROM_useSEAL = false;
   if (ToInject.length > 0) {
-    logreport(
+    Console.log(
       `Injecting ${ToInject.length} ${pluralize(
         "dependency",
         ToInject.length
-      )}. ${ToInject.map((x) => x.name).join(",")}`,
-      "log",
-      true
+      )}. ${ToInject.map((x) => x.name).join(",")}`
     );
+    const InjectingProgressBar = Console.progress.bar();
+    let InjectingIndex = 0;
     for (const inject of ToInject) {
       if (inject.requires_import === true && inject.install_type !== "import") {
-        logreport.error(
+        Console.error(
           `${inject.name} is required to be imported. Could not inject.`
         );
       }
+      InjectingProgressBar((ToInject.length / InjectingIndex) * 100);
       await HandleInjectPackage(cwd, inject);
+      InjectingIndex++;
     }
     useSeal = await GenerateLocalCwdTreeSeal(cwd);
     //We do not resolve seals here, if anything is to install then resolve seal if not, resolve seal, so it's only called once instead of twice if both toinstall and toinject is ran.
     MUST_RESOLVE_PACKAGES_FROM_useSEAL = true;
   }
   if (ToInstall.length > 0) {
-    logreport(
+    Console.log(
       `Updating ${ToInstall.length} ${pluralize(
         "dependency",
         ToInstall.length
-      )}. ${ToInstall.map((x) => x.name).join(",")}`,
-      "log",
-      true
+      )}. ${ToInstall.map((x) => x.name).join(",")}`
     );
     const Seal = useSeal || (await GenerateLocalCwdTreeSeal(cwd));
     useSeal = Seal;
@@ -382,7 +383,7 @@ export async function AddFilesFromLockData(
     //we read after sealing since sealing may change the package json, might aswell just pass as param to seal in future.
     const cwdJSON = await ReadPackageJSON(cwd);
     if (!cwdJSON.success || typeof cwdJSON.result === "string") {
-      logreport.error(
+      Console.error(
         `${cwd} does not have a package.json file. => ${cwdJSON.result}`
       );
       process.exit(1);
@@ -395,13 +396,19 @@ export async function AddFilesFromLockData(
         recursive: true,
       });
     }
+    const InstallingProgressBar = Console.progress.bar();
+    let InstallingIndex = 0;
     for (const i of ToInstall) {
       if (i.install_type !== "default") {
         //imports are handled through `ResolvePackagesFromTreeSeal`
         continue;
       }
+      InstallingProgressBar(
+        ((InstallingIndex + 1) / ToInstall.length) * 100,
+        `Installing ${i.name}`
+      );
       if (i.requires_import) {
-        logreport.error(`${i.name} is required to be imported.`);
+        Console.error(`${i.name} is required to be imported.`);
       }
       const parsed = ParsePackageName(i.name);
       await RemovePackageNameFromDependencyScopes(
@@ -414,26 +421,40 @@ export async function AddFilesFromLockData(
       cwdJSON.result[i.dependency_scope][
         parsed.FullPackageName
       ] = `file:${i.resolve}`;
+      InstallingIndex++;
     }
+    InstallingProgressBar(100);
     await WritePackageJSON(cwd, JSON.stringify(cwdJSON.result, undefined, 2));
-    try {
-      execSync(
+    const InstallingSpinner = Console.progress.spinner(
+      "bouncingBar",
+      `Installing with ${PackageManager}.`
+    );
+    InstallingSpinner.start();
+    await new Promise<void>((resolve, reject) => {
+      exec(
         `${PackageManager} ${PackageManager === "yarn" ? "" : "install"}`,
-        {
-          cwd: cwd,
-          stdio: log ? "inherit" : "ignore",
+        (err, stdout) => {
+          if (err) {
+            reject(err);
+          }
+          if (log) {
+            Console.LOG(`${chalk.gray(PackageManager)}: ${stdout}`);
+          }
+          resolve();
         }
       );
-    } catch (err) {
-      console.error(err);
-      logreport.error(err);
-    }
+    }).catch((err) => {
+      InstallingSpinner.stop();
+      Console.error(err);
+      process.exit(1);
+    });
+    InstallingSpinner.stop();
   } else {
     if (MUST_RESOLVE_PACKAGES_FROM_useSEAL && useSeal) {
       await ResolvePackagesFromTreeSeal(cwd, useSeal); //if packages were injected and nothing was installed, we need to resolve, since we don't resolve after injection since resolve will be called twice if there's any installs.
       await RemoveUnwantedPackagesFromLpmLocalFromSeal(cwd, useSeal);
     }
-    logreport("Up to date.", "log", true);
+    Console.log("Up to date.");
     return;
   }
 }
@@ -450,7 +471,7 @@ async function AddPackagesToLocalPackageJSON(
     const s = x.split(" ");
     const pn = ParsePackageName(s[0]);
     if (!pn.FullPackageName || !pn.PackageVersion) {
-      logreport.error(`Failed to get package name or version. ${s[0]} => ${x}`);
+      Console.error(`Failed to get package name or version. ${s[0]} => ${x}`);
       process.exit(1);
     }
     //if @current is passed, keep all the current data, including import, version etc. basically do not change the package.json for package.
@@ -521,7 +542,7 @@ export default class add {
       ? targetWorkingDirectory
       : process.cwd();
     if (Options.traverseImports && !Options.import) {
-      logreport.error("You cannot set traverse-imports without importing .");
+      Console.error("You cannot set traverse-imports without importing .");
       process.exit(1);
     }
     if (!Options.packageManager) {
@@ -529,10 +550,11 @@ export default class add {
         targetWorkingDirectory
       );
     }
-    logreport.assert(
+    Console.assert(
       SUPPORTED_PACKAGE_MANAGERS.indexOf(Options.packageManager) !== -1,
       `Unsupported package manager "${Options.packageManager}"`
     );
+
     const Packages: string[] = [];
     const PackageManagerFlags: string[] = [];
     for (const arg of Arg0) {
@@ -547,7 +569,7 @@ export default class add {
               str = p.FullPackageName += "@" + f?.Parsed.PackageVersion;
             }
           } catch (err) {
-            logreport.error(err);
+            Console.error(err);
           }
         }
         if (Options.import) {

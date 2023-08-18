@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { program as CommanderProgram } from "commander";
-import logreport from "../utils/logreport.js";
+import { Console } from "@mekstuff/logreport";
 import { ReadLockFileFromCwd, dependency_scope } from "../utils/lpmfiles.js";
 import {
   ParsePackageName,
@@ -27,17 +27,17 @@ export default class preprare {
   ) {
     packageDirectory = packageDirectory || process.cwd();
     if (safeproduction && (Options.dev || Options.production)) {
-      logreport.error(
+      Console.error(
         "`--production` or `--dev` flags cannot be set while calling `prepare safeproduction`."
       );
     }
     if (Options.production && Options.dev) {
-      logreport.error(
+      Console.error(
         "Both `--production` & `--dev` flags cannot be set while calling `prepare`."
       );
     }
     if (!Options.production && !Options.dev && !safeproduction) {
-      logreport.error(
+      Console.error(
         "Must provide either `--production` or `--dev` flag when calling `prepare`."
       );
     }
@@ -69,7 +69,7 @@ export default class preprare {
       typeof PackageFile.result === "string" ||
       PackageFile.result === undefined
     ) {
-      return logreport.error("Could not access package.json");
+      return Console.error("Could not access package.json");
     }
     const tree: Tree[] = [];
     const subTreeChildren: Tree[] = [];
@@ -90,7 +90,7 @@ export default class preprare {
       if (safeproduction) {
         const PackageJSON = await ReadPackageJSON(packageDirectory);
         if (!PackageJSON.success || typeof PackageJSON.result === "string") {
-          return logreport.error("Could not read package.json");
+          return Console.error("Could not read package.json");
         }
         const InJSON =
           PackageJSON.result?.[LockFile.pkgs[lockpkg].dependency_scope]?.[
@@ -108,23 +108,23 @@ export default class preprare {
         if (Options.production) {
           const pkgjson = await ReadPackageJSON(LockFile.pkgs[lockpkg].resolve);
           if (pkgjson.success === false && typeof pkgjson.result === "string") {
-            logreport.error(
+            Console.error(
               `Could not access package.json for published packge "${lockpkg}" => ${pkgjson.result}`
             );
             return;
           }
           if (!pkgjson.result || typeof pkgjson.result === "string") {
-            logreport.error("Something went wrong.");
+            Console.error("Something went wrong.");
             return;
           }
           if (pkgjson.result.version === undefined) {
-            logreport.error(
+            Console.error(
               `Published package does not have "version" field. => ${lockpkg} => ${LockFile.pkgs[lockpkg].resolve}`
             );
             return;
           }
           if (pkgjson.result.name === undefined) {
-            logreport.error(
+            Console.error(
               `Published package does not have "name" field. => ${lockpkg} => ${LockFile.pkgs[lockpkg].resolve}`
             );
             return;
@@ -138,7 +138,7 @@ export default class preprare {
           const scope = LockFile.pkgs[lockpkg].dependency_scope;
           const tdepscope = PackageFile.result[scope];
           if (!tdepscope) {
-            logreport.error("Invalid dep: " + lockpkg);
+            Console.error("Invalid dep: " + lockpkg);
             process.exit(1);
           }
           tdepscope[ParsedInfo.FullPackageName] =
@@ -150,7 +150,7 @@ export default class preprare {
           const scope = LockFile.pkgs[lockpkg].dependency_scope;
           const tdepscope = PackageFile.result[scope];
           if (!tdepscope) {
-            logreport.error("Invalid dep: " + lockpkg);
+            Console.error("Invalid dep: " + lockpkg);
             process.exit(1);
           }
           tdepscope[ParsedInfo.FullPackageName] =
@@ -173,11 +173,11 @@ export default class preprare {
             (x) => `${x.n} => ${x.v} | ${pluralize(x.ds, 1)}`
           ).join("\n")}`;
         if (Options.safeproductionError) {
-          logreport.error(msg);
+          Console.error(msg);
           return;
         }
         if (Options.safeproductionWarn) {
-          logreport.warn(msg);
+          Console.warn(msg);
           return;
         }
         await prompt<{ run_safe: boolean }>({
@@ -189,35 +189,31 @@ export default class preprare {
           .then(async (res) => {
             if (res.run_safe) {
               await this.Prepare(false, { production: true });
-              logreport(
-                "Run `lpm prepare --development` when you finish publishing/pushing your package to switch back to local registry dependencies.",
-                "log",
-                true
+              Console.log(
+                "Run `lpm prepare --development` when you finish publishing/pushing your package to switch back to local registry dependencies."
               );
             } else {
-              logreport.error(
+              Console.error(
                 "Package not ready for production. run `lpm prepare --production`"
               );
             }
           })
           .catch((err) => {
-            logreport.error(
+            Console.error(
               "Package not ready for production. run `lpm prepare --production`\n\n" +
                 err
             );
           });
       } else {
-        logreport(
-          `Your package "${PackageFile.result.name}" 📦 is already ready for production 🚀`,
-          "log",
-          true
+        Console.log(
+          `Your package "${PackageFile.result.name}" 📦 is already ready for production 🚀`
         );
       }
     } else {
       const prefix = Options.production
         ? `${PackageFile.result.name} Ready For Production 🚀`
         : `${PackageFile.result.name} Ready For Development 🚧`;
-      logreport(
+      Console.log(
         prefix + `${tree.length > 0 ? "\n" + LogTree.parse(tree) : ""}`
       );
       await WritePackageJSON(
@@ -246,7 +242,7 @@ export default class preprare {
     }
     const PackageJSON = await ReadPackageJSON(process.cwd());
     if (!PackageJSON.success || typeof PackageJSON.result === "string") {
-      return logreport.error("Could not read package.json");
+      return Console.error("Could not read package.json");
     }
     const InDevModePackages: {
       n: string;
@@ -278,11 +274,11 @@ export default class preprare {
           (x) => `${x.n} => ${x.v} | ${pluralize(x.ds, 1)}`
         ).join("\n")}`;
       if (Options.error) {
-        logreport.error(msg);
+        Console.error(msg);
         return;
       }
       if (Options.warn) {
-        logreport.warn(msg);
+        Console.warn(msg);
         return;
       }
       await prompt<{ run_safe: boolean }>({
@@ -294,29 +290,23 @@ export default class preprare {
         .then(async (res) => {
           if (res.run_safe) {
             await this.Prepare(false, { production: true });
-            logreport(
-              "Run `lpm prepare --development` when you finish publishing/pushing your package to switch back to local registry dependencies.",
-              "log",
-              true
+            Console.info(
+              "Run `lpm prepare --development` when you finish publishing/pushing your package to switch back to local registry dependencies."
             );
           } else {
-            logreport.error(
+            Console.error(
               "Package not ready for production. run `lpm prepare --production`"
             );
           }
         })
         .catch((err) => {
-          logreport.error(
+          Console.error(
             "Package not ready for production. run `lpm prepare --production`\n\n" +
               err
           );
         });
     } else {
-      logreport(
-        "Your package 📦 is already ready for production 🚀",
-        "log",
-        true
-      );
+      Console.info("Your package 📦 is already ready for production 🚀");
     }
   }
   build(program: typeof CommanderProgram) {
