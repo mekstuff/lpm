@@ -15,6 +15,7 @@ import enqpkg from "enquirer";
 import { getcommand } from "../lpm.js";
 import { AddOptions } from "../commands/add.js";
 import { Console } from "@mekstuff/logreport";
+import LogOutdatedPackagesAtCwd from "./packageinfo.js";
 const { prompt } = enqpkg;
 
 /**
@@ -925,6 +926,7 @@ export async function GenerateLockFileAtCwd(
     ]);
   }
   GeneratingLockProgress(100, "LOCK File Generated.");
+  LogOutdatedPackagesAtCwd(cwd);
   return {
     RequiresInstall: RequiresInstall,
     RequiresNode_Modules_Injection: RequiresNode_Modules_Injection,

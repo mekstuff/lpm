@@ -2,7 +2,7 @@ import chalk from "chalk";
 import { program as CommanderProgram } from "commander";
 import { SUPPORTED_PACKAGE_MANAGERS } from "../utils/CONSTANTS.js";
 import { GetPreferredPackageManager } from "./add.js";
-import { Console } from "@mekstuff/logreport";
+import { Console, LogSteps } from "@mekstuff/logreport";
 import { exec } from "child_process";
 import { BulkRemovePackagesFromLocalCwdStore } from "./add.js";
 import {
@@ -48,9 +48,19 @@ export default class remove {
         PackageManagerFlags.push(arg);
       }
     });
-    const RemoveLog = Console.log(
+    Console.log(
       `Removing ${Packages.length} package${Packages.length === 1 ? "" : "s"}.`
     );
+    const Stepper = LogSteps(
+      [
+        "Fetching Packages",
+        "Removing from node_modules",
+        "Generating LOCK",
+        "Removing from local store",
+      ],
+      true
+    );
+    Stepper.step();
     for (const index in Packages) {
       const pkg = Packages[index];
       let ParsedInfo = ParsePackageName(pkg);
@@ -63,11 +73,6 @@ export default class remove {
           }
         }
       }
-      RemoveLog(
-        `Fetching package ${chalk.blue(ParsedInfo.FullResolvedName)} [${
-          Number(index) + 1
-        } / ${Packages.length}]...`
-      );
       if (!Options.skipLockCheck) {
         if (!LOCKFILE.pkgs[ParsedInfo.FullResolvedName]) {
           Console.error(
@@ -79,6 +84,7 @@ export default class remove {
       Packages[index] = ParsedInfo.FullResolvedName;
       if (
         PackageJSON.result["local"] &&
+        LOCKFILE.pkgs[ParsedInfo.FullResolvedName] &&
         PackageJSON.result["local"][
           LOCKFILE.pkgs[ParsedInfo.FullResolvedName].dependency_scope
         ]
@@ -90,9 +96,6 @@ export default class remove {
       //Set to package name since we don't need version
       UNINSTALL_PKGS_STRBUILD.push(ParsedInfo.FullPackageName);
     }
-    RemoveLog(
-      `Removing from package manager ${chalk.blue(Options.packageManager)}...`
-    );
 
     const execString =
       Options.packageManager +
@@ -101,6 +104,7 @@ export default class remove {
       PackageManagerFlags.join(" ");
 
     Console.VERBOSE(`Executing "${execString}"`);
+    Stepper.step();
     const p = new Promise<number | null>((resolve) => {
       const executed = exec(execString);
       executed.on("exit", (code) => {
@@ -135,12 +139,15 @@ export default class remove {
       process.exit(1);
     }
     np.result.local = PackageJSON.result.local;
+    Stepper.step();
     await WritePackageJSON(
       process.cwd(),
       JSON.stringify(np.result, undefined, 2)
     );
     await GenerateLockFileAtCwd();
+    Stepper.step();
     await BulkRemovePackagesFromLocalCwdStore(process.cwd(), Packages, true);
+    Stepper.step();
   }
   build(program: typeof CommanderProgram) {
     program

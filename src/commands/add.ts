@@ -3,7 +3,7 @@
 
 import fs from "fs";
 import pluralize from "pluralize";
-import { Console } from "@mekstuff/logreport";
+import { Console, LogSteps } from "@mekstuff/logreport";
 import { program as CommanderProgram } from "commander";
 import { SUPPORTED_PACKAGE_MANAGERS } from "../utils/CONSTANTS.js";
 import {
@@ -444,11 +444,12 @@ export async function AddFilesFromLockData(
         }
       );
     }).catch((err) => {
-      InstallingSpinner.stop();
+      InstallingSpinner.stop(true);
       Console.error(err);
       process.exit(1);
     });
-    InstallingSpinner.stop();
+    InstallingSpinner.text(`Successfully Installed With ${PackageManager}`);
+    InstallingSpinner.stop(true);
   } else {
     if (MUST_RESOLVE_PACKAGES_FROM_useSEAL && useSeal) {
       await ResolvePackagesFromTreeSeal(cwd, useSeal); //if packages were injected and nothing was installed, we need to resolve, since we don't resolve after injection since resolve will be called twice if there's any installs.
@@ -557,6 +558,11 @@ export default class add {
 
     const Packages: string[] = [];
     const PackageManagerFlags: string[] = [];
+    const Stepper = LogSteps(
+      ["Resolving Packages", "Updating JSON", "Generating LOCK", "Installing"],
+      true
+    );
+    Stepper.step();
     for (const arg of Arg0) {
       if (!arg.match("^-")) {
         let str = arg;
@@ -583,6 +589,8 @@ export default class add {
         PackageManagerFlags.push(arg);
       }
     }
+
+    Stepper.step();
     await AddPackagesToLocalPackageJSON(
       targetWorkingDirectory,
       Packages,
@@ -594,8 +602,11 @@ export default class add {
         ? "peerDependencies"
         : "dependencies"
     );
+    Stepper.step();
     const { RequiresInstall, RequiresNode_Modules_Injection } =
       await GenerateLockFileAtCwd(targetWorkingDirectory, Options);
+    Stepper.step();
+
     await AddFilesFromLockData(
       Options.packageManager,
       Options.showPmLogs,
@@ -603,6 +614,7 @@ export default class add {
       RequiresInstall,
       RequiresNode_Modules_Injection
     );
+    Stepper.step();
   }
   build(program: typeof CommanderProgram) {
     program
