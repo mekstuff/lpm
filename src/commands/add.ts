@@ -261,16 +261,23 @@ async function ResolvePackagesFromTreeSeal(
  */
 async function RemoveUnwantedPackagesFromLpmLocalFromSeal(
   rootDirectory: string,
-  Seal: TreeSealArray
+  Seal: TreeSealArray,
+  subDirectory?: string
 ) {
-  const lpmdir = path.join(rootDirectory, ".lpm");
+  const lpmdir = path.join(rootDirectory, subDirectory || ".lpm");
   if (!fs.existsSync(lpmdir)) {
     return;
   }
   const indir = fs.readdirSync(lpmdir);
   let removed = 0;
   for (const f of fs.readdirSync(lpmdir)) {
-    if (!Seal[f]) {
+    if (f.charAt(0) === "@") {
+      //if in scope, @scope.package, run remove inside the scope
+      await RemoveUnwantedPackagesFromLpmLocalFromSeal(lpmdir, Seal, f);
+      continue;
+    }
+    const fn = subDirectory ? subDirectory + "/" + f : f;
+    if (!Seal[fn]) {
       fs.rmSync(path.join(lpmdir, f), { recursive: true, force: true });
       removed++;
     }
