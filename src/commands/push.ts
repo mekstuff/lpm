@@ -1,26 +1,21 @@
-import chalk from "chalk";
-import pluralize from "pluralize";
+// import chalk from "chalk";
+// import pluralize from "pluralize";
 import { Console } from "@mekstuff/logreport";
 import { program as CommanderProgram } from "commander";
-import { ParsePackageName, ReadPackageJSON } from "../utils/PackageReader.js";
-import {
-  ILPMPackagesJSON_Package_installation,
-  ReadLPMPackagesJSON,
-} from "../utils/lpmfiles.js";
-import { getcommand } from "../lpm.js";
+// import { ParsePackageName, ReadPackageJSON } from "../utils/PackageReader.js";
+// import {
+//   ILPMPackagesJSON_Package_installation,
+//   ReadLPMPackagesJSON,
+// } from "../utils/lpmfiles.js";
+// import { getcommand } from "../lpm.js";
 
 export default class push {
-  async Push(
-    cwd: string | undefined,
-    options: {
-      Log?: boolean;
-      scripts?: boolean;
-      force?: boolean;
-      requiresImport?: boolean;
-      bump?: boolean;
-    },
-    CaptureNotPublished?: boolean
-  ) {
+  async Push() {
+    // CaptureNotPublished?: boolean // }, //   bump?: boolean; //   requiresImport?: boolean; //   force?: boolean; //   scripts?: boolean; //   Log?: boolean; // options: { // cwd: string | undefined,
+    Console.error(
+      "Use the `autoupgrade` command on directories you wish to automatically receive updates. Pushing is no longer supported."
+    );
+    /*
     if (typeof cwd !== "string") {
       cwd = process.cwd();
     }
@@ -110,30 +105,37 @@ export default class push {
       `${chalk.green(
         `[${Total_Updated}/${TargetInstallationsList.length}]`
       )} ${pluralize("package", Total_Updated)} successfully updated. ${OG_dir}`
-    );
+      );
+      */
   }
   build(program: typeof CommanderProgram) {
     program
       .command("push [cwd]")
-      .option("-log [boolean]", "Log command process.", false)
-      .option(
-        "-b, --bump",
-        "Bumping will go through all installed version of the package, not just the currently published version. This does not mean all versions will update to this specific version, but instead update to their latest compatiable version. e.g ^1.2.4 => 1.3.0"
-      )
-      .option("--no-scripts [boolean]", "Does not run any scripts")
-      .option(
-        "-f, --force [boolean]",
-        "Forces the publish even if nothing was changed."
-      )
-      .option(
-        "--requires-import [boolean]",
-        "For the package to be installed it must be used as an imported package."
-      )
       .description(
-        "Publishes the package then updates all other packages that has the version installed. Use --bump to ignore the version and run on every installations."
+        "Use the `autoupgrade` command on directories you wish to automatically receive updates. Pushing is no longer supported."
       )
-      .action(async (cwd, options) => {
-        await this.Push(cwd, options);
+      // .option("-log [boolean]", "Log command process.", false)
+      // .option(
+      //   "-b, --bump",
+      //   "Bumping will go through all installed version of the package, not just the currently published version. This does not mean all versions will update to this specific version, but instead update to their latest compatiable version. e.g ^1.2.4 => 1.3.0"
+      // )
+      // .option("--no-scripts [boolean]", "Does not run any scripts")
+      // .option(
+      //   "-f, --force [boolean]",
+      //   "Forces the publish even if nothing was changed."
+      // )
+      // .option(
+      //   "--requires-import [boolean]",
+      //   "For the package to be installed it must be used as an imported package."
+      // )
+      // .description(
+      //   "Publishes the package then updates all other packages that has the version installed. Use --bump to ignore the version and run on every installations."
+      // )
+      .action(() => {
+        this.Push();
       });
+    // .action(async (cwd, options) => {
+    //   await this.Push(cwd, options);
+    // });
   }
 }

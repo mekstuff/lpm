@@ -4,6 +4,7 @@ import {
   ReadLPMPackagesJSON,
   ReadLockFileFromCwd,
   ResolvePackageFromLPMJSON,
+  ResolvePackageFromLPMJSONFromDirectory,
 } from "../utils/lpmfiles.js";
 import LogTree, { Tree } from "console-log-tree";
 import {
@@ -87,8 +88,18 @@ export default class list {
           name: SHOW_NAME,
         });
       }
+      const DirectoryIsPublished = await ResolvePackageFromLPMJSONFromDirectory(
+        process.cwd()
+      );
+      let AddonStr = "";
+      if (DirectoryIsPublished) {
+        if (DirectoryIsPublished.Package.publish_sig !== undefined) {
+          AddonStr =
+            " | " + chalk.gray(DirectoryIsPublished.Package.publish_sig);
+        }
+      }
       tree.push({
-        name: PackageJSON.result?.name as string,
+        name: (PackageJSON.result?.name + AddonStr) as string,
         children: subTreeChildren,
       });
       console.log(LogTree.parse(tree));
@@ -150,6 +161,7 @@ export default class list {
           t.push(j);
         }
       }
+
       tree.push({
         name: VersionTreePackage,
         children: t,

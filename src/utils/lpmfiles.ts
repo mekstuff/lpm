@@ -13,9 +13,14 @@ import {
 } from "./PackageReader.js";
 import enqpkg from "enquirer";
 import { getcommand } from "../lpm.js";
-import { AddOptions } from "../commands/add.js";
-import { Console } from "@mekstuff/logreport";
+import {
+  AddFilesFromLockData,
+  AddOptions,
+  GetPreferredPackageManager,
+} from "../commands/add.js";
+import { Console, LogSteps } from "@mekstuff/logreport";
 import LogOutdatedPackagesAtCwd from "./packageinfo.js";
+import { SUPPORTED_PACKAGE_MANAGERS } from "./CONSTANTS.js";
 const { prompt } = enqpkg;
 
 /**
@@ -235,6 +240,15 @@ export async function ResolvePackageFromLPMJSON(
   return { Package: TargetPackage, Parsed };
 }
 
+let USE_LPM_PACKAGES_JSON_MEMORY = true;
+/**
+ * By default, once lpm packages json is read, it will not read the file again and use the object in memory, if
+ * something like a watcher is being used/or the lpm packages json file can be updated elsewhere before this command
+ * finishes executing, set UseMemory to false so it always read for the new data in the file system
+ */
+export function SetUseLPMPackagesJSONMemory(state: boolean) {
+  USE_LPM_PACKAGES_JSON_MEMORY = state;
+}
 /**
  * Store mthe LPMPackagesJSON in memory so the JSON file is consistent, preventing race conditions.
  */
@@ -244,7 +258,7 @@ const CorruptedGlobalRegistryJSONFileWarn = `Possibly corrupted global registry 
  * Reads the LPM Packages json file, if it doesn't exists then it will create it.
  */
 export async function ReadLPMPackagesJSON(): Promise<ILPMPackagesJSON> {
-  if (LPMPackagesJSON_Memory !== undefined) {
+  if (LPMPackagesJSON_Memory !== undefined && USE_LPM_PACKAGES_JSON_MEMORY) {
     return LPMPackagesJSON_Memory;
   }
   try {
@@ -420,7 +434,7 @@ export async function RemovePackagesFromLPMJSON(
                 const UpgradeCommand = await getcommand("upgrade");
                 for (const i of PublishInfo.Package.installations) {
                   await UpgradeCommand.Upgrade(
-                    PublishInfo.Parsed.FullPackageName,
+                    [PublishInfo.Parsed.FullPackageName],
                     i.path,
                     {
                       currentDisabled: true,
@@ -551,14 +565,6 @@ export async function AddInstallationsToGlobalPackage(
       ({ path }, index) => !paths.includes(path, index + 1)
     );
   }
-  // console.log(
-  //   LogTree.parse(
-  //     LinkedUpdateInfo.map((x) => {
-  //       return { name: x };
-  //     })
-  //   )
-  // );
-  // logreport(`\n\t${LinkedUpdateInfo.join("\n\t")}`, "log", true);
   await WriteLPMPackagesJSON(LPMPackagesJSON);
 }
 
@@ -693,6 +699,29 @@ export async function GetPackageFromLockFileByName(
   }
 }
 
+/**
+ * Runs `GenerateLockFileAtCwd` then `AddFilesFromLockData`
+ */
+export async function GenerateLockAndAddFiles(
+  cwd: string,
+  currentAddOptions?: AddOptions,
+  packageManager?: SUPPORTED_PACKAGE_MANAGERS,
+  showPmLogs?: boolean
+) {
+  const Stepper = LogSteps(["Generating LOCK", "Adding Files"], true);
+  Stepper.step();
+  const { RequiresInstall, RequiresNode_Modules_Injection } =
+    await GenerateLockFileAtCwd(cwd, currentAddOptions);
+  Stepper.step();
+  await AddFilesFromLockData(
+    packageManager || (await GetPreferredPackageManager(cwd)),
+    showPmLogs,
+    cwd,
+    RequiresInstall,
+    RequiresNode_Modules_Injection
+  );
+  Stepper.step();
+}
 /**
  * When generating LOCK file, files that should be updated,install,uninstalled are returned as this type.
  */

@@ -1,186 +1,159 @@
 import semver from "semver";
-import { Console } from "@mekstuff/logreport";
 import { program as CommanderProgram } from "commander";
 import {
-  ILPMPackagesJSON,
-  LOCKFILEPKG,
+  GenerateLockAndAddFiles,
   ReadLPMPackagesJSON,
   ReadLockFileFromCwd,
-  ResolvePackageFromLPMJSON,
+  dependency_scope,
 } from "../utils/lpmfiles.js";
-import { ParsePackageName, ReadPackageJSON } from "../utils/PackageReader.js";
-
-import enqpkg from "enquirer";
+import { Console } from "@mekstuff/logreport";
+import { ParsePackageName } from "../utils/PackageReader.js";
 import chalk from "chalk";
-import { getcommand } from "../lpm.js";
-import { ShowDiffChalk } from "./list.js";
+import enqpkg from "enquirer";
+import { BulkAddPackagesToLocalPackageJSON } from "./add.js";
 const { prompt } = enqpkg;
 
 interface upgradeoptions {
   latest?: boolean;
   currentDisabled?: boolean;
 }
-export default class upgrade {
-  async RunUpgrade(
-    Name: string,
-    PackageInfo: LOCKFILEPKG,
-    LPMPackages: ILPMPackagesJSON,
-    dirname: string,
-    options: upgradeoptions,
-    returnRequests?: string[]
-  ) {
-    const Parsed = ParsePackageName(
-      Name,
-      undefined,
-      PackageInfo.sem_ver_symbol
-    );
-    const InVersionTree = LPMPackages.version_tree[Parsed.FullPackageName];
-    if (!InVersionTree) {
-      Console.error(
-        `Could not find ${Parsed.FullPackageName} in version tree.`
-      );
-      process.exit(1);
-    }
-    InVersionTree.sort((a, b) => {
-      return semver.compare(b, a);
-    });
-    if (options.latest) {
-      const Latest = semver.maxSatisfying(
-        InVersionTree,
-        Parsed.VersionWithSymbol
-      );
-      const LatestPublishedVersion = await ResolvePackageFromLPMJSON(
-        `${Parsed.FullPackageName}@${Latest}`
-      );
-      Console.info(
-        `${ShowDiffChalk(
-          Parsed.FullResolvedName,
-          Parsed.PackageVersion === Latest
-        )} | ${ShowDiffChalk(
-          PackageInfo.publish_sig,
-          PackageInfo.publish_sig ===
-            LatestPublishedVersion?.Package.publish_sig
-        )} => ${chalk.greenBright(
-          `${LatestPublishedVersion?.Parsed.FullResolvedName} | ${LatestPublishedVersion?.Package.publish_sig}`
-        )}`
-      );
-      return;
-    }
-    await prompt<{ nv: string }>({
-      name: "nv",
-      type: "select",
-      message: `${dirname} is currently using version ${Parsed.VersionWithSymbol} of ${Parsed.FullPackageName}`,
-      choices: [
-        ...InVersionTree.map((x) => {
-          const PublishedData =
-            LPMPackages.packages[Parsed.FullPackageName + "@" + x];
-          // let str = PackageInfo.sem_ver_symbol + x;
-          let str = PackageInfo.sem_ver_symbol + x;
-          if (semver.lt(x, Parsed.PackageVersion)) {
-            return { name: x, message: chalk.redBright(str) };
-          }
-          if (x === Parsed.PackageVersion) {
-            return {
-              disabled: options.currentDisabled ? true : false,
-              name: x,
-              message: chalk.gray(
-                (str +=
-                  " (current) " +
-                  `(${
-                    PublishedData.publish_sig === PackageInfo.publish_sig
-                      ? PackageInfo.publish_sig
-                      : chalk.redBright(PackageInfo.publish_sig)
-                  } | ${PublishedData.publish_sig})`)
-              ),
-            };
-          }
-          if (semver.satisfies(x, Parsed.VersionWithSymbol)) {
-            return { name: x, message: chalk.greenBright(str) };
-          }
-          if (semver.gt(x, Parsed.PackageVersion)) {
-            return { name: x, message: chalk.yellow(str) };
-          }
-          return { name: x, message: str };
-        }),
-        { name: "skip", message: "Exit" },
-      ],
-    })
-      .then(async (res) => {
-        if (res.nv === "skip") {
-          process.exit();
-        }
-        const str = `${Parsed.FullPackageName}@${Parsed.SemVersionSymbol}${res.nv}`;
-        if (returnRequests) {
-          returnRequests.push(str);
-          return;
-        }
-        await getcommand("add").Add([str], {
-          showPmLogs: true,
-          lockVersion: true,
-        });
-      })
-      .catch((err) => {
-        Console.error(err);
-      });
-  }
+export default class updgrade {
   async Upgrade(
-    targetPackages: string[] | undefined,
+    Packages: string[] | undefined,
     cwd: string,
     options: upgradeoptions
   ) {
-    const currjson = await ReadPackageJSON(cwd);
-    let dirname = cwd;
-    if (
-      currjson.success &&
-      typeof currjson.result !== "string" &&
-      currjson.result.name
-    ) {
-      dirname = currjson.result.name;
+    const LOCK = await ReadLockFileFromCwd(cwd, undefined, true);
+    if (!LOCK) {
+      Console.error(`No lock file exists in "${cwd}"`);
+      process.exit(1);
     }
-    const LOCK = await ReadLockFileFromCwd(cwd);
     const LPMPackages = await ReadLPMPackagesJSON();
-    let TotalUpgradesRequestRan = 0;
-    const toRunUpdate: string[] = [];
-    for (const pkgName in LOCK.pkgs) {
-      if (targetPackages && targetPackages.length > 0) {
-        if (
-          targetPackages.indexOf(ParsePackageName(pkgName).FullPackageName) ==
-          -1
-        ) {
-          continue;
-        }
+    const dataToUpgrade: { str: string; dependency_scope: dependency_scope }[] =
+      [];
+    for (const pkg in LOCK.pkgs) {
+      const Parsed = ParsePackageName(pkg);
+      const PackageInfo = LOCK.pkgs[pkg];
+      if (
+        Packages !== undefined &&
+        Packages.indexOf(Parsed.FullPackageName) === -1
+      ) {
+        continue;
       }
-      const pkg = LOCK.pkgs[pkgName];
-      Console.log(`(${chalk.underline(cwd)})`);
-      await this.RunUpgrade(
-        pkgName,
-        pkg,
-        LPMPackages,
-        dirname,
-        options,
-        toRunUpdate
-      );
-      TotalUpgradesRequestRan++;
+      const InVersionTree = LPMPackages.version_tree[Parsed.FullPackageName];
+      if (!InVersionTree) {
+        Console.error(
+          `Could not find ${Parsed.FullPackageName} in version tree.`
+        );
+        process.exit(1);
+      }
+      InVersionTree.sort((a, b) => {
+        return semver.compare(b, a);
+      });
+      let ver: string | undefined;
+      if (!options.latest) {
+        const x = await prompt<{ nv: string }>({
+          name: "nv",
+          type: "select",
+          message: `${cwd} is currently using version ${Parsed.VersionWithSymbol} of ${Parsed.FullPackageName}`,
+          choices: [
+            ...InVersionTree.map((x) => {
+              const PublishedData =
+                LPMPackages.packages[Parsed.FullPackageName + "@" + x];
+              // let str = PackageInfo.sem_ver_symbol + x;
+              let str = PackageInfo.sem_ver_symbol + x;
+              if (semver.lt(x, Parsed.PackageVersion)) {
+                return { name: x, message: chalk.redBright(str) };
+              }
+              if (x === Parsed.PackageVersion) {
+                return {
+                  disabled: options.currentDisabled ? true : false,
+                  name: x,
+                  message: chalk.gray(
+                    (str +=
+                      " (current) " +
+                      `(${
+                        PublishedData.publish_sig === PackageInfo.publish_sig
+                          ? PackageInfo.publish_sig
+                          : chalk.redBright(PackageInfo.publish_sig)
+                      } | ${PublishedData.publish_sig})`)
+                  ),
+                };
+              }
+              if (semver.satisfies(x, Parsed.VersionWithSymbol)) {
+                return { name: x, message: chalk.greenBright(str) };
+              }
+              if (semver.gt(x, Parsed.PackageVersion)) {
+                return { name: x, message: chalk.yellow(str) };
+              }
+              return { name: x, message: str };
+            }),
+            { name: "skip", message: "Exit" },
+          ],
+        });
+        if (x.nv !== "skip") {
+          ver = x.nv;
+        } else {
+          process.exit(1);
+        }
+      } else {
+        ver = InVersionTree[0];
+      }
+      if (!ver) {
+        Console.error(`Could not resolve version.`);
+        process.exit(1);
+      }
+      let str = Parsed.FullPackageName + "@" + PackageInfo.sem_ver_symbol + ver;
+
+      if (PackageInfo.traverse_imports) {
+        str += " traverse-imports";
+      }
+      if (PackageInfo.install_type === "import") {
+        str += " import";
+      }
+      dataToUpgrade.push({
+        str: str,
+        dependency_scope: PackageInfo.dependency_scope,
+      });
     }
-    if (TotalUpgradesRequestRan > 0) {
-      await getcommand("add").Add(
-        toRunUpdate,
-        {
-          showPmLogs: true,
-          lockVersion: true,
-        },
-        cwd
-      );
-    } else {
-      Console.log("Nothing to upgrade.");
-    }
+    const forBulk = async (
+      dependency_scope: dependency_scope
+    ): Promise<string[]> => {
+      const t: string[] = [];
+      dataToUpgrade.forEach((x, index) => {
+        if (x.dependency_scope === dependency_scope) {
+          dataToUpgrade.splice(index, 1);
+          t.push(x.str);
+        }
+      });
+      return t;
+    };
+    await BulkAddPackagesToLocalPackageJSON(cwd, [
+      {
+        Packages: await forBulk("dependencies"),
+        dependency_scope: "dependencies",
+      },
+      {
+        Packages: await forBulk("devDependencies"),
+        dependency_scope: "devDependencies",
+      },
+      {
+        Packages: await forBulk("peerDependencies"),
+        dependency_scope: "peerDependencies",
+      },
+      {
+        Packages: await forBulk("optionalDependencies"),
+        dependency_scope: "optionalDependencies",
+      },
+    ]);
+    await GenerateLockAndAddFiles(cwd, { lockVersion: true, showPmLogs: true });
   }
   build(program: typeof CommanderProgram) {
     program
       .command("upgrade [packages...]")
       .option(
         "--latest",
-        "upgrades to the latest compatiable version of package without prompting selection."
+        "Upgrades to the latest compatiable version of a package without prompting a manual selection."
       )
       .action(async (packages, options) => {
         await this.Upgrade(packages, process.cwd(), options);

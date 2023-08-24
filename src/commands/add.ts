@@ -65,7 +65,8 @@ export interface AddOptions {
   peer?: boolean;
   optional?: boolean;
   traverseImports?: boolean;
-  preserveImport?: boolean;
+  // preserve?: boolean;
+  // preserveImport?: boolean;
   lockVersion?: boolean;
 }
 
@@ -297,6 +298,7 @@ async function HandleInjectPackage(
     recursive: true,
     force: true,
   });
+
   // we need to also update this package where every else the current package using it is installed.
   // so if xd2 has xd installed. and xd3 has xd2 installed we need to inject xd in both xd2 and xd3.
   const cwdPublished = await ResolvePackageFromLPMJSONFromDirectory(cwd);
@@ -454,18 +456,49 @@ export async function AddFilesFromLockData(
     if (MUST_RESOLVE_PACKAGES_FROM_useSEAL && useSeal) {
       await ResolvePackagesFromTreeSeal(cwd, useSeal); //if packages were injected and nothing was installed, we need to resolve, since we don't resolve after injection since resolve will be called twice if there's any installs.
       await RemoveUnwantedPackagesFromLpmLocalFromSeal(cwd, useSeal);
+      return;
     }
     Console.log("Up to date.");
     return;
   }
 }
 
-async function AddPackagesToLocalPackageJSON(
+/**
+ * Bulk add to the package json, instead of writing for each dependency scope, package.json is read once, dependency_scopes are updated
+ * then package.json is wrote.
+ */
+export async function BulkAddPackagesToLocalPackageJSON(
+  cwd: string,
+  data: { Packages: string[]; dependency_scope: dependency_scope }[]
+) {
+  const r = await ReadPackageJSON(cwd, undefined, true);
+  if (!r.success && typeof r.result === "string") {
+    Console.error(`package.json error: ${r.result}`);
+    process.exit(1);
+  }
+  for (const d of data) {
+    if (d.Packages.length > 0) {
+      await AddPackagesToLocalPackageJSON(
+        cwd,
+        d.Packages,
+        d.dependency_scope,
+        r
+      );
+    }
+  }
+  await WritePackageJSON(cwd, JSON.stringify(r.result, undefined, 2));
+}
+/**
+ * Add the packages to the cwd package.json "local" field
+ */
+export async function AddPackagesToLocalPackageJSON(
   cwd: string,
   Packages: string[],
-  dependency_scope: dependency_scope
+  dependency_scope: dependency_scope,
+  usePackageJSON?: Awaited<ReturnType<typeof ReadPackageJSON>>
 ) {
-  const PackageJSON = await ReadPackageJSON(cwd);
+  const PackageJSON =
+    usePackageJSON === undefined ? await ReadPackageJSON(cwd) : usePackageJSON;
   const l: PackageFile["local"] = {};
   l[dependency_scope] = l[dependency_scope] || {};
   Packages.map((x) => {
@@ -526,11 +559,12 @@ async function AddPackagesToLocalPackageJSON(
       ...PackageJSON.result.local[dependency_scope],
       ...l[dependency_scope],
     };
-
-    await WritePackageJSON(
-      cwd,
-      JSON.stringify(PackageJSON.result, undefined, 2)
-    );
+    if (!usePackageJSON) {
+      await WritePackageJSON(
+        cwd,
+        JSON.stringify(PackageJSON.result, undefined, 2)
+      );
+    }
   }
 }
 export default class add {
@@ -631,10 +665,12 @@ export default class add {
         "--traverse-imports",
         "Makes it so every imported package dependency is imported aswell. e.g `pkg1` has dependency of `pkg2`, `pkg1` does not import `pkg2`, when `pkg3` installs `pkg1` to have pkg2 to be imported aswell, use this flag. "
       )
+      /*
       .option(
-        "--preserve-import",
-        "If previously imported and you try to add without --import, you will be prompted. Setting this keeps import as true"
+        "--preserve",
+        "If package was previously imported, preserve will make sure that the current install is also imported, similar "
       )
+      */
       .option(
         "-log, --show-pm-logs [boolean]",
         "Show package managers output in terminal.",

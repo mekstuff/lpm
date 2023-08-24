@@ -1,5 +1,6 @@
 import path from "path";
 import tar from "tar";
+import fs from "fs";
 import { Console } from "@mekstuff/logreport";
 import { program as CommanderProgram } from "commander";
 import pack from "./pack.js";
@@ -7,6 +8,7 @@ import { ParsePackageName, ReadPackageJSON } from "../utils/PackageReader.js";
 import {
   AddPackagesToLPMJSON,
   CreateLPMPackageDirectory,
+  GetLPMDirectory,
   GetLPMPackagesDirectory,
   ReadLPMPackagesJSON,
 } from "../utils/lpmfiles.js";
@@ -18,7 +20,24 @@ const { prompt } = enqpkg;
 interface PublishOptions {
   scripts?: boolean;
   requiresImport?: boolean;
-  // push?: boolean;
+  force?: boolean;
+}
+
+export async function GetPublishTriggersDirectory() {
+  return path.join(await GetLPMDirectory(), "publish_triggers");
+}
+
+async function TemporarilyAddPublishedFile(PackageName: string) {
+  const TempAddPublishedFilesDir = path.join(
+    await GetPublishTriggersDirectory(),
+    PackageName
+  );
+  if (!fs.existsSync(TempAddPublishedFilesDir)) {
+    fs.mkdirSync(TempAddPublishedFilesDir, { recursive: true });
+    setTimeout(() => {
+      fs.rmSync(TempAddPublishedFilesDir, { recursive: true, force: true });
+    }, 100);
+  }
 }
 
 export default class publish extends pack {
@@ -97,6 +116,10 @@ export default class publish extends pack {
       Console.error("Failed to pack.");
       process.exit(1);
     }
+    if (OLDVERSION?.publish_sig === packRes.pack_signature && !Options.force) {
+      Console.log("Nothing changed.");
+      return;
+    }
 
     await AddPackagesToLPMJSON([
       {
@@ -125,6 +148,7 @@ export default class publish extends pack {
       console.log(err);
       Console.error("Failed to publish " + err);
     }
+    TemporarilyAddPublishedFile(ParsedInfo.FullPackageName);
     PublishLog(`Published`);
     return packRes.pack_signature;
   }
@@ -133,6 +157,10 @@ export default class publish extends pack {
       .command("publish [packagePath]")
       .description("Packages and publishes your package to the local registry.")
       .option("--no-scripts [boolean]", "Does not run any scripts")
+      .option(
+        "--force [boolean]",
+        "If nothing change, still run the publish request."
+      )
       .option(
         "--requires-import [boolean]",
         "For the package to be installed it must be used as an imported package."
