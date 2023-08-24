@@ -18,11 +18,7 @@ interface upgradeoptions {
   currentDisabled?: boolean;
 }
 export default class updgrade {
-  async Upgrade(
-    Packages: string[] | undefined,
-    cwd: string,
-    options: upgradeoptions
-  ) {
+  async Upgrade(Packages: string[], cwd: string, options: upgradeoptions) {
     const LOCK = await ReadLockFileFromCwd(cwd, undefined, true);
     if (!LOCK) {
       Console.error(`No lock file exists in "${cwd}"`);
@@ -34,8 +30,9 @@ export default class updgrade {
     for (const pkg in LOCK.pkgs) {
       const Parsed = ParsePackageName(pkg);
       const PackageInfo = LOCK.pkgs[pkg];
+      console.log(Packages);
       if (
-        Packages !== undefined &&
+        Packages.length > 0 &&
         Packages.indexOf(Parsed.FullPackageName) === -1
       ) {
         continue;
