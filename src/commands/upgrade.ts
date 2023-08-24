@@ -30,7 +30,6 @@ export default class updgrade {
     for (const pkg in LOCK.pkgs) {
       const Parsed = ParsePackageName(pkg);
       const PackageInfo = LOCK.pkgs[pkg];
-      console.log(Packages);
       if (
         Packages.length > 0 &&
         Packages.indexOf(Parsed.FullPackageName) === -1
