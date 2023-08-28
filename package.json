@@ -9,7 +9,7 @@
     "lpx": "dist/lpx.js"
   },
   "dependencies": {
-    "@mekstuff/logreport": "file:C:\\Users\\Lanzo\\.local-package-manager\\packages\\@mekstuff\\logreport\\1.0.0-dev\\pkg",
+    "@mekstuff/logreport": "file:.lpm\\@mekstuff\\logreport@1.0.0-dev--d081b94a08-761db1",
     "@types/pluralize": "^0.0.30",
     "chalk": "^5.3.0",
     "chokidar": "^3.5.3",
@@ -36,7 +36,10 @@
   },
   "local": {
     "dependencies": {
-      "@mekstuff/logreport": "!1.0.0-dev"
+      "@mekstuff/logreport": [
+        "!1.0.0-dev",
+        "import"
+      ]
     }
   }
 }

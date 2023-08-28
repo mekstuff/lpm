@@ -3,7 +3,7 @@
     "@mekstuff/logreport@1.0.0-dev": {
       "name": "@mekstuff/logreport@1.0.0-dev",
       "dependency_scope": "dependencies",
-      "install_type": "default",
+      "install_type": "import",
       "publish_sig": "d081b94a08-761db1",
       "resolve": "C:\\Users\\Lanzo\\.local-package-manager\\packages\\@mekstuff\\logreport\\1.0.0-dev\\pkg",
       "sem_ver_symbol": "!",
