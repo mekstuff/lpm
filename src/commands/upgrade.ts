@@ -16,6 +16,7 @@ const { prompt } = enqpkg;
 interface upgradeoptions {
   latest?: boolean;
   currentDisabled?: boolean;
+  includeSkip?: boolean;
 }
 export default class updgrade {
   async Upgrade(Packages: string[], cwd: string, options: upgradeoptions) {
@@ -84,13 +85,16 @@ export default class updgrade {
               }
               return { name: x, message: str };
             }),
-            { name: "skip", message: "Exit" },
+            { name: "skip", message: "Skip", disabled: !options.includeSkip },
+            { name: "exit", message: "Exit" },
           ],
         });
-        if (x.nv !== "skip") {
-          ver = x.nv;
+        if (x.nv === "exit") {
+          process.exit();
+        } else if (x.nv === "skip") {
+          continue;
         } else {
-          process.exit(1);
+          ver = x.nv;
         }
       } else {
         ver = InVersionTree[0];
