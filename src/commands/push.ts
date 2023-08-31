@@ -5,11 +5,11 @@ import { ReadLPMPackagesJSON } from "../utils/lpmfiles.js";
 import { getcommand } from "../lpm.js";
 
 export default class push {
-  async Push(cwd: string, CaptureNotPublished?: boolean) {
-    // CaptureNotPublished?: boolean // }, //   bump?: boolean; //   requiresImport?: boolean; //   force?: boolean; //   scripts?: boolean; //   Log?: boolean; // options: { // cwd: string | undefined,
-    Console.warn(
-      "Recommend using the `autoupgrade` command on directories you wish to automatically receive updates."
-    );
+  async Push(
+    cwd: string,
+    CaptureNotPublished: boolean | undefined,
+    options: { latest?: boolean }
+  ) {
     const PackageJSON = await ReadPackageJSON(cwd);
     if (!PackageJSON.success || typeof PackageJSON.result === "string") {
       Console.error("Could not read package. => " + PackageJSON.result);
@@ -32,21 +32,20 @@ export default class push {
       Console.error(`${name} is not published.`);
       process.exit(1);
     }
-
     for (const i of pkg.installations) {
       await getcommand("upgrade").Upgrade([name], i.path, {
         includeSkip: true,
+        latest: options.latest,
       });
     }
   }
   build(program: typeof CommanderProgram) {
     program
       .command("push [cwd]")
-      .description(
-        "Use the `autoupgrade` command on directories you wish to automatically receive updates. Pushing is no longer supported."
-      )
-      .action(() => {
-        this.Push(process.cwd(), true);
+      .description("Runs upgrade on installed directories")
+      .option("--latest", "Upgrades to the latest version without prompting.")
+      .action((cwd, options) => {
+        this.Push(cwd || process.cwd(), true, options);
       });
   }
 }

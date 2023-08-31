@@ -5,6 +5,7 @@ import { program as CommanderProgram } from "commander";
 import { Console } from "@mekstuff/logreport";
 import { execSync } from "child_process";
 import { getcommand } from "../lpm.js";
+import { SetUseLPMPackagesJSONMemory } from "../utils/lpmfiles.js";
 
 export default class autopublish {
   async GetFiles(): Promise<string[]> {
@@ -34,6 +35,7 @@ export default class autopublish {
     if (files.length === 0) {
       Console.error(`Specifiy file(s)/directories to watch.`);
     }
+    SetUseLPMPackagesJSONMemory(false);
     Console.log(`Watching ${files.join(",")}`);
     const watcher = chokidar.watch(files);
     let Debounce: number | undefined;
