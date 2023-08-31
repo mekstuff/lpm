@@ -1,6 +1,7 @@
 import * as add from "./add.js";
 import * as remove from "./remove.js";
 
+import * as autopublish from "./autopublish.js";
 import * as publish from "./publish.js";
 import * as unpublish from "./unpublish.js";
 
@@ -33,6 +34,7 @@ import * as upgrade from "./upgrade.js";
 const commands = {
   add,
   remove,
+  autopublish,
   publish,
   unpublish,
   push,
