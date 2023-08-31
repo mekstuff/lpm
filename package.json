@@ -5,8 +5,7 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "lpm": "dist/lpm.js",
-    "lpx": "dist/lpx.js"
+    "lpm": "dist/lpm.js"
   },
   "dependencies": {
     "@mekstuff/logreport": "file:.lpm\\@mekstuff\\logreport@1.0.0-dev--d081b94a08-761db1",
