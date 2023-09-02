@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import chokidar from "chokidar";
+import debounce from "lodash.debounce";
 import { program as CommanderProgram } from "commander";
 import { Console } from "@mekstuff/logreport";
 import { execSync } from "child_process";
@@ -38,19 +39,8 @@ export default class autopublish {
     SetUseLPMPackagesJSONMemory(false);
     Console.log(`Watching ${files.join(",")}`);
     const watcher = chokidar.watch(files);
-    let Debounce: number | undefined;
 
-    watcher.on("change", async (path) => {
-      if (Debounce !== undefined) {
-        const cd = new Date();
-        if (cd.getTime() - Debounce > 500) {
-          Debounce = new Date().getTime();
-        } else {
-          return;
-        }
-      } else {
-        Debounce = new Date().getTime();
-      }
+    const debouncedChangeHandler = debounce(async (path: string) => {
       Console.info(path);
       await getcommand("publish").Publish(process.cwd(), {
         scripts: false,
@@ -59,6 +49,9 @@ export default class autopublish {
       if (options.command) {
         execSync(options.command, { stdio: "inherit" });
       }
+    }, 400);
+    watcher.on("change", async (path) => {
+      debouncedChangeHandler(path);
     });
   }
 

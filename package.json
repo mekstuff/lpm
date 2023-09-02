@@ -15,6 +15,7 @@
     "commander": "^10.0.1",
     "console-log-tree": "1.2.1",
     "enquirer": "^2.3.6",
+    "lodash.debounce": "^4.0.8",
     "moment": "^2.29.4",
     "pluralize": "^8.0.0",
     "rxjs": "^7.8.1",
@@ -23,6 +24,7 @@
   },
   "devDependencies": {
     "@types/console-log-tree": "^1.2.0",
+    "@types/lodash.debounce": "^4.0.7",
     "@types/node": "^20.2.5",
     "@types/tar": "^6.1.5",
     "@typescript-eslint/eslint-plugin": "^5.60.1",
