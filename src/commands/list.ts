@@ -13,9 +13,11 @@ import {
   ReadPackageJSON,
 } from "../utils/PackageReader.js";
 import pluralize from "pluralize";
+import { Console } from "@mekstuff/logreport";
 interface ListOptions {
   all?: boolean;
   depth?: number;
+  outdated?: boolean;
 }
 
 export function ShowDiffChalk(str: unknown, comparison: unknown) {
@@ -29,6 +31,9 @@ export default class list {
   async List(targetPackage: string | undefined, Options: ListOptions) {
     Options.depth = Number(Options.depth);
     const LPMPackagesJSON = await ReadLPMPackagesJSON();
+    if (Options.outdated) {
+      Console.warn(`Only showing outdated packages.`);
+    }
     if (!Options.all) {
       const PackageJSON = await ReadPackageJSON(process.cwd());
       if (
@@ -45,6 +50,7 @@ export default class list {
         if (targetPackage && targetPackage !== Package) {
           continue;
         }
+        let IS_OUTDATED = false;
         const pkg = LockFile.pkgs[Package];
         const pkgNameParsed = ParsePackageName(
           Package,
@@ -75,6 +81,12 @@ export default class list {
               HighestBreakingVersion,
               HighestBreakingVersion === PublishedInfo.Parsed.PackageVersion
             );
+            if (
+              HighestBreakingVersion !== pkgNameParsed.PackageVersion ||
+              pkg.publish_sig !== PublishedInfo.Package.publish_sig
+            ) {
+              IS_OUTDATED = true;
+            }
             SHOW_NAME += ` | ${HighestFeaturedVersionStr} | ${HighestBreakingVersionStr}`;
           }
           SHOW_NAME += ` | ${ShowDiffChalk(
@@ -83,6 +95,9 @@ export default class list {
           )}`;
         } else {
           SHOW_NAME += ` | ${chalk.red("NOT PUBLISHED!")}`;
+        }
+        if (!IS_OUTDATED && Options.outdated) {
+          continue;
         }
         subTreeChildren.push({
           name: SHOW_NAME,
@@ -114,6 +129,7 @@ export default class list {
       }
       const t: Tree[] = [];
       for (const x of LPMPackagesJSON.version_tree[VersionTreePackage]) {
+        let IS_OUTDATED = false;
         const tp = LPMPackagesJSON.packages[`${VersionTreePackage}@${x}`];
         if (tp) {
           const j: Tree = { name: x + " | " + tp.publish_sig };
@@ -140,6 +156,9 @@ export default class list {
                 tp.publish_sig === inlock.publish_sig
               )} | ${inlock.sem_ver_symbol + x}`;
             }
+            if (tp.publish_sig !== inlock.publish_sig) {
+              IS_OUTDATED = true;
+            }
             const v: Tree[] = [];
             if (p) {
               v.push({
@@ -156,6 +175,9 @@ export default class list {
               name: p ? p : i.path,
               children: v,
             });
+          }
+          if (!IS_OUTDATED && Options.outdated) {
+            continue;
           }
           j.children = _t;
           t.push(j);
@@ -175,6 +197,7 @@ export default class list {
       .description("List lpm packages")
       .option("-a, --all", "List all published packages")
       .option("-d, --depth <number>", "Depth of the list tree", "1")
+      .option("--outdated [boolean]", "Shows only outdated packages")
       .action(async (targetPackage, options) => {
         await this.List(targetPackage, options);
       });
