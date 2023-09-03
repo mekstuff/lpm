@@ -82,16 +82,15 @@ export default class remove {
         }
       }
       Packages[index] = ParsedInfo.FullResolvedName;
-      if (
-        PackageJSON.result["local"] &&
-        LOCKFILE.pkgs[ParsedInfo.FullResolvedName] &&
-        PackageJSON.result["local"][
-          LOCKFILE.pkgs[ParsedInfo.FullResolvedName].dependency_scope
-        ]
-      ) {
-        PackageJSON.result["local"][
-          LOCKFILE.pkgs[ParsedInfo.FullResolvedName].dependency_scope
-        ] = undefined;
+      const HasLocal = PackageJSON.result.local;
+      if (HasLocal !== undefined) {
+        const scopeInLocal =
+          LOCKFILE.pkgs[ParsedInfo.FullResolvedName] &&
+          HasLocal[LOCKFILE.pkgs[ParsedInfo.FullResolvedName].dependency_scope];
+
+        if (scopeInLocal) {
+          delete scopeInLocal[ParsedInfo.FullPackageName];
+        }
       }
       //Set to package name since we don't need version
       UNINSTALL_PKGS_STRBUILD.push(ParsedInfo.FullPackageName);
