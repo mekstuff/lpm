@@ -66,8 +66,8 @@ export async function CreateLPMPackageDirectory(
     .mkdir(dir, {
       recursive: true,
     })
-    .then(() => {
-      fs.promises.mkdir(path.join(dir, "pkg")).catch((err) => {
+    .then(async () => {
+      await fs.promises.mkdir(path.join(dir, "pkg")).catch((err) => {
         Console.error(err);
       });
     })

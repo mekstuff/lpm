@@ -116,10 +116,6 @@ export default class publish extends pack {
       Console.error("Failed to pack.");
       process.exit(1);
     }
-    if (OLDVERSION?.publish_sig === packRes.pack_signature && !Options.force) {
-      Console.log("Nothing changed.");
-      return;
-    }
 
     await AddPackagesToLPMJSON([
       {
@@ -147,6 +143,11 @@ export default class publish extends pack {
     } catch (err) {
       console.log(err);
       Console.error("Failed to publish " + err);
+    }
+    //since we already packed it, we still move it to `pkg` folder even if nothing has changed, however don't add to published directory so no autoupgrade detects it.
+    if (OLDVERSION?.publish_sig === packRes.pack_signature && !Options.force) {
+      Console.log("Nothing changed.");
+      return;
     }
     TemporarilyAddPublishedFile(ParsedInfo.FullPackageName);
     PublishLog(`Published`);
