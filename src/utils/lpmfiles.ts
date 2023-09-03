@@ -584,12 +584,9 @@ export async function RemoveInstallationsFromGlobalPackage(
         true
       );
     }
-    TargetPackage.installations = TargetPackage.installations.filter((e) => {
-      const f = Installations.indexOf(e.path);
-      if (f !== -1) {
-        return false;
-      }
-    });
+    TargetPackage.installations = TargetPackage.installations.filter(
+      (e) => Installations.indexOf(e.path) === -1
+    );
   });
   await WriteLPMPackagesJSON(LPMPackagesJSON);
 }
