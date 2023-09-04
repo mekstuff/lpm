@@ -34,9 +34,22 @@ async function TemporarilyAddPublishedFile(PackageName: string) {
   );
   if (!fs.existsSync(TempAddPublishedFilesDir)) {
     fs.mkdirSync(TempAddPublishedFilesDir, { recursive: true });
-    setTimeout(() => {
+    setTimeout(async () => {
       fs.rmSync(TempAddPublishedFilesDir, { recursive: true, force: true });
-    }, 100);
+      const parsed = ParsePackageName(PackageName);
+      if (parsed.OrginizationName !== "") {
+        const p = path.join(
+          await GetPublishTriggersDirectory(),
+          parsed.OrginizationName
+        );
+        if (fs.existsSync(p)) {
+          const st = fs.readdirSync(p);
+          if (st.length === 0) {
+            fs.rmSync(p, { force: true, recursive: true });
+          }
+        }
+      }
+    }, 400);
   }
 }
 

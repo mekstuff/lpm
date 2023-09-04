@@ -73,10 +73,7 @@ export default class autoupgrade {
     // prevents overwriting with old data.
     SetUseLPMPackagesJSONMemory(false);
     chokidar
-      .watch(
-        packages.map((x) => path.join(PublishTriggersDir, x)),
-        { ignoreInitial: true }
-      )
+      .watch(PublishTriggersDir, { ignoreInitial: true })
       .on("addDir", async (x) => {
         let rootTrigger: string | undefined;
         for (const f of packages) {
