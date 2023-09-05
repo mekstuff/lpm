@@ -122,7 +122,7 @@ export default class list {
           process.cwd(),
           {
             scripts: Options.showSignature === "pack" ? true : false,
-            out: "C:/Users/Lanzo/Desktop/list-command-output-package.tgz",
+            out: tempFolder.path + "list-command-output-package.tgz",
           }
         );
         AddonStr +=
