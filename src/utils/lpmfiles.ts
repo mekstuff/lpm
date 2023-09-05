@@ -845,7 +845,7 @@ export async function GenerateLockFileAtCwd(
           "--" +
           PublishedPackage.Package.publish_sig;
         if (!fs.existsSync(path.join(cwd as string, ".lpm", signaturedname))) {
-          RequiresInstall.push(f);
+          RequiresNode_Modules_Injection.push(f);
         }
       }
 
