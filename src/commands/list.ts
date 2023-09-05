@@ -1,6 +1,7 @@
 import chalk from "chalk";
 import { program as CommanderProgram } from "commander";
 import {
+  CreateTemporaryFolder,
   ReadLPMPackagesJSON,
   ReadLockFileFromCwd,
   ResolvePackageFromLPMJSON,
@@ -14,10 +15,12 @@ import {
 } from "../utils/PackageReader.js";
 import pluralize from "pluralize";
 import { Console } from "@mekstuff/logreport";
+import { getcommand } from "../lpm.js";
 interface ListOptions {
   all?: boolean;
   depth?: number;
   outdated?: boolean;
+  showSignature?: boolean | "pack";
 }
 
 export function ShowDiffChalk(str: unknown, comparison: unknown) {
@@ -113,10 +116,28 @@ export default class list {
             " | " + chalk.gray(DirectoryIsPublished.Package.publish_sig);
         }
       }
+      if (Options.showSignature) {
+        const tempFolder = await CreateTemporaryFolder();
+        const { pack_signature } = await getcommand("pack").Pack(
+          process.cwd(),
+          {
+            scripts: Options.showSignature === "pack" ? true : false,
+            out: "C:/Users/Lanzo/Desktop/list-command-output-package.tgz",
+          }
+        );
+        AddonStr +=
+          " | " +
+          ShowDiffChalk(
+            pack_signature,
+            pack_signature === DirectoryIsPublished?.Package.publish_sig
+          );
+        tempFolder.done();
+      }
       tree.push({
         name: (PackageJSON.result?.name + AddonStr) as string,
         children: subTreeChildren,
       });
+
       console.log(LogTree.parse(tree));
       return;
     }
@@ -198,6 +219,10 @@ export default class list {
       .option("-a, --all", "List all published packages")
       .option("-d, --depth <number>", "Depth of the list tree", "1")
       .option("--outdated [boolean]", "Shows only outdated packages")
+      .option(
+        "--show-signature [boolean]",
+        "Shows the current signature of the package, It packs it in a temporary folder without running any scripts to get the pack signature"
+      )
       .action(async (targetPackage, options) => {
         await this.List(targetPackage, options);
       });

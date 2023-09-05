@@ -838,6 +838,17 @@ export async function GenerateLockFileAtCwd(
         requires_import: PublishedPackage.Package.requires_import,
       };
 
+      //not in .lpm directory
+      if (install_type === "import") {
+        const signaturedname =
+          PublishedPackage.Parsed.FullResolvedName +
+          "--" +
+          PublishedPackage.Package.publish_sig;
+        if (!fs.existsSync(path.join(cwd as string, ".lpm", signaturedname))) {
+          RequiresInstall.push(f);
+        }
+      }
+
       //not in node_modules
       if (
         !fs.existsSync(

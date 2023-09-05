@@ -123,6 +123,7 @@ type TreeSealArray = {
       dependency_scope: dependency_scope;
     }[];
     resolve: string;
+    level: number;
   };
 };
 
@@ -137,8 +138,10 @@ async function GetDirectoryDependenciesForCwdTreeSeal(
   TreeSealArray: TreeSealArray,
   rootDirectory?: string,
   depOfDep?: string,
-  traverseFolliwingImports?: boolean
+  traverseFolliwingImports?: boolean,
+  level?: number
 ) {
+  level = level ?? 1;
   const LPMLOCK = await ReadLockFileFromCwd(TargetDirectory, undefined, true);
   if (!LPMLOCK) {
     return false;
@@ -160,6 +163,7 @@ async function GetDirectoryDependenciesForCwdTreeSeal(
       TreeSealArray[n] = {
         installs: [],
         resolve: tp.resolve,
+        level: level,
       };
     }
     TreeSealArray[n].installs.push({
@@ -173,7 +177,8 @@ async function GetDirectoryDependenciesForCwdTreeSeal(
       TreeSealArray,
       rootDirectory,
       n,
-      traverseFolliwingImports
+      traverseFolliwingImports,
+      level + 1
     );
   }
 }
@@ -181,13 +186,16 @@ async function GetDirectoryDependenciesForCwdTreeSeal(
 /**
  * Generates a tree seal array from the rootDirectory
  */
-async function GenerateLocalCwdTreeSeal(
-  rootDirectory: string
+export async function GenerateLocalCwdTreeSeal(
+  rootDirectory: string,
+  readOnly?: boolean
 ): Promise<TreeSealArray> {
-  const store_cache_path = path.join(rootDirectory, ".lpm", ".lpm-seal.lock");
-  if (fs.existsSync(store_cache_path)) {
-    fs.rmSync(store_cache_path, { recursive: true, force: true });
-    fs.mkdirSync(store_cache_path, { recursive: true });
+  if (!readOnly) {
+    const store_cache_path = path.join(rootDirectory, ".lpm", ".lpm-seal.lock");
+    if (fs.existsSync(store_cache_path)) {
+      fs.rmSync(store_cache_path, { recursive: true, force: true });
+      fs.mkdirSync(store_cache_path, { recursive: true });
+    }
   }
   const CArray: TreeSealArray = {};
   await GetDirectoryDependenciesForCwdTreeSeal(rootDirectory, CArray);
@@ -459,6 +467,7 @@ export async function AddFilesFromLockData(
     });
     InstallingSpinner.text(`Successfully Installed With ${PackageManager}`);
     InstallingSpinner.stop(true);
+    await RemoveUnwantedPackagesFromLpmLocalFromSeal(cwd, useSeal);
   } else {
     if (MUST_RESOLVE_PACKAGES_FROM_useSEAL && useSeal) {
       await ResolvePackagesFromTreeSeal(cwd, useSeal); //if packages were injected and nothing was installed, we need to resolve, since we don't resolve after injection since resolve will be called twice if there's any installs.
