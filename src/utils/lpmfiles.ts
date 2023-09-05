@@ -848,7 +848,7 @@ export async function GenerateLockFileAtCwd(
           )
         )
       ) {
-        RequiresNode_Modules_Injection.push(f);
+        RequiresInstall.push(f);
       }
 
       //dependency_scope changed
