@@ -21,6 +21,7 @@ interface PublishOptions {
   scripts?: boolean;
   requiresImport?: boolean;
   force?: boolean;
+  silent?: boolean;
 }
 
 export async function GetPublishTriggersDirectory() {
@@ -162,7 +163,9 @@ export default class publish extends pack {
       Console.log("Nothing changed.");
       return;
     }
-    TemporarilyAddPublishedFile(ParsedInfo.FullPackageName);
+    if (!Options.silent) {
+      TemporarilyAddPublishedFile(ParsedInfo.FullPackageName);
+    }
     PublishLog(`Published`);
     return packRes.pack_signature;
   }
@@ -171,6 +174,10 @@ export default class publish extends pack {
       .command("publish [packagePath]")
       .description("Packages and publishes your package to the local registry.")
       .option("--no-scripts [boolean]", "Does not run any scripts")
+      .option(
+        "--silent",
+        "Does not add to published directory, so will not trigger any `autoupgrade`"
+      )
       .option(
         "--force [boolean]",
         "If nothing change, still run the publish request."
