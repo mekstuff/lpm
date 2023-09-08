@@ -8,6 +8,7 @@ const { prompt } = enqpkg;
 
 interface bulkOptions {
   verify?: boolean;
+  warn?: boolean;
 }
 
 export default class Bulk {
@@ -44,7 +45,18 @@ export default class Bulk {
           command = res.Verify;
         }
       }
-      execSync(command, { cwd: path.join(directory, child), stdio: "inherit" });
+      try {
+        execSync(command, {
+          cwd: path.join(directory, child),
+          stdio: "inherit",
+        });
+      } catch (err) {
+        if (options.warn === true) {
+          Console.warn(err);
+        } else {
+          throw err;
+        }
+      }
     }
   }
   build(program: typeof CommanderProgram) {
@@ -54,6 +66,10 @@ export default class Bulk {
         "--verify",
         "Prompts to verify running command on each file first",
         false
+      )
+      .option(
+        "--warn",
+        "If any error occurs during execution on a directory/file, instead of erroring and stopping the entire process, warn the error message a proceed with other directories/files as usual"
       )
       .description("Run a command against all files within a given directory")
       .action(async (directory, command, whitelist, options) => {
