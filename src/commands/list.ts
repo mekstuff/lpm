@@ -173,7 +173,7 @@ export default class list {
             let p: string | undefined;
             if (ijson.success && typeof ijson.result !== "string") {
               p = `(${ijson.result.name}) | ${ShowDiffChalk(
-                tp.publish_sig,
+                inlock.publish_sig,
                 tp.publish_sig === inlock.publish_sig
               )} | ${inlock.sem_ver_symbol + x}`;
             }
