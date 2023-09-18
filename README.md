@@ -1,6 +1,8 @@
+> **Warning**
 > Docs aren't completed and may contain outdated data, local-package-manager
 > is still in testing phase. Until an official version is released to npm, install and use at your own risk. Bugs and errors may occur that may hinder your development process.
 
+> **Warning**
 > Local Package Manager is currently only used in-house, updates may not be frequent as yet and possible updates may not be released incrementally.
 
 <div  align="center">
