@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+/* Made with ❤ By mekstuff.com */
+
 import { Command } from "commander";
 import commands from "./commands/index.js";
 import { GenerateLockFileAtCwd } from "./utils/lpmfiles.js";
